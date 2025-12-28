@@ -135,7 +135,7 @@ function App() {
           setCpuHands(prev => { let n = [...prev]; n[currentCpuIdx] = h; return n; });
           setSlots(newSlots);
           setDeck(newDeck);
-          setGameLog(`CPU ${turn}が${discarded.name}を捨てました`);
+          setGameLog(`CPU ${turn}が捨てました`);
           setTurn((turn + 1) % 4);
         }
       }, 1000);
@@ -233,28 +233,8 @@ function App() {
           <h1 className="title-large">🍲 Hotpot Game</h1>
           <div className="menu-buttons">
             <button onClick={() => setGameMode("cpu")} className="mega-button">CPUと対戦</button>
-            <button onClick={() => setGameMode("online")} className="mega-button online">オンライン対戦</button>
+            <button onClick={() => setGameMode("online")} className="mega-button">オンライン対戦</button>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (gameMode === "online" && !isJoined) {
-    return (
-      <div className="game-container full-height">
-        <div className="start-screen">
-          <h2 className="section-title">オンライン対戦</h2>
-          <input type="text" value={playerName} onChange={(e)=>setPlayerName(e.target.value)} className="name-input-large" placeholder="名前を入力" />
-          <button onClick={() => {
-            if (!playerName) return alert("名前を入力してください");
-            const playersRef = ref(db, `rooms/${roomId}/players`);
-            const newPlayerRef = push(playersRef);
-            setMyId(newPlayerRef.key);
-            set(newPlayerRef, { name: playerName, joinedAt: serverTimestamp(), hand: [] });
-            onDisconnect(newPlayerRef).remove();
-            setIsJoined(true);
-          }} className="mega-button">入室する</button>
         </div>
       </div>
     );
@@ -290,52 +270,49 @@ function App() {
           </div>
 
           <div className="center-board-wrapper">
-             {/* 左(CPU 1) プレイヤーラベル */}
              <div className={`player-info-box side left-side ${(turn === (mIdx + 1) % 4) ? 'active' : ''}`}>
                <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+1)%4]]?.name || "CPU 1") : "CPU 1"}</div>
              </div>
 
-             {/* 中央の十字ボード */}
              <div className="cross-grid">
                 <div className="grid-cell empty"></div>
-                {/* 上スロット(CPU 2) */}
                 <div className="grid-cell slot top-slot" onClick={() => pickFromSlotAction((mIdx + 2) % 4)}>
                   <CardDisplay card={slots[(mIdx + 2) % 4]} />
                 </div>
                 <div className="grid-cell empty"></div>
 
-                {/* 左スロット(CPU 1) */}
                 <div className="grid-cell slot left-slot" onClick={() => pickFromSlotAction((mIdx + 1) % 4)}>
                   <CardDisplay card={slots[(mIdx + 1) % 4]} />
                 </div>
-                {/* 中央：山札 */}
                 <div className={`grid-cell deck-cell ${(turn === mIdx && !hasDrawn) ? 'can-draw' : ''}`} onClick={drawAction}>
-                   <div className="deck-art">🎴</div>
+                   <div className="deck-back-design"></div>
                 </div>
-                {/* 右スロット(CPU 3) */}
                 <div className="grid-cell slot right-slot" onClick={() => pickFromSlotAction((mIdx + 3) % 4)}>
                   <CardDisplay card={slots[(mIdx + 3) % 4]} />
                 </div>
 
                 <div className="grid-cell empty"></div>
-                {/* 下スロット(自分) */}
                 <div className="grid-cell slot bottom-slot" onClick={() => pickFromSlotAction(mIdx)}>
                   <CardDisplay card={slots[mIdx]} />
                 </div>
                 <div className="grid-cell empty"></div>
              </div>
 
-             {/* 右(CPU 3) プレイヤーラベル */}
              <div className={`player-info-box side right-side ${(turn === (mIdx + 3) % 4) ? 'active' : ''}`}>
                <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "CPU 3") : "CPU 3"}</div>
              </div>
           </div>
 
-          <div className="table-row bottom">
+          <div className="table-row bottom-player-row">
             <div className={`my-hand-area ${turn === mIdx ? 'active' : ''}`}>
                <div className="my-hand-container">
                   {getProcessedHand(curHand).map((c, i) => (
-                    <CardDisplay key={i} card={c} className={`${(turn === mIdx && hasDrawn) ? 'discardable' : ''} ${c.isCompleted ? 'completed' : ''}`} onClick={() => discardAction(i)} />
+                    <CardDisplay 
+                      key={i} 
+                      card={c} 
+                      className={`${(turn === mIdx && hasDrawn) ? 'discardable' : ''} ${c.isCompleted ? 'completed' : ''}`} 
+                      onClick={() => discardAction(i)} 
+                    />
                   ))}
                 </div>
             </div>
