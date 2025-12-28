@@ -3,7 +3,6 @@
   --accent-orange: #e67e22;
   --dark-orange: #d35400;
   --light-orange: #f39c12;
-  --panel-bg: rgba(255, 255, 255, 0.08);
   --active-gold: #f1c40f;
 }
 
@@ -15,7 +14,6 @@ body {
   overflow: hidden;
 }
 
-/* --- PC最適化 (1280px想定) --- */
 .game-container {
   max-width: 1280px;
   margin: 0 auto;
@@ -25,214 +23,84 @@ body {
   position: relative;
 }
 
-/* --- 右上のスコアパネル --- */
-.floating-score {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  width: 220px;
-  background: rgba(0, 0, 0, 0.7);
-  border: 2px solid var(--accent-orange);
-  border-radius: 15px;
-  backdrop-filter: blur(10px);
-  z-index: 1000;
-  overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+/* --- 小型スコアUI --- */
+.compact-score-badge {
+  position: absolute; top: 15px; right: 20px;
+  background: rgba(0, 0, 0, 0.6);
+  border-left: 4px solid var(--accent-orange);
+  padding: 8px 15px; border-radius: 4px 12px 12px 4px;
+  backdrop-filter: blur(5px); z-index: 1000; min-width: 140px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
 }
+.score-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.score-label { font-size: 0.65rem; font-weight: bold; color: var(--accent-orange); }
+.score-value { font-size: 1.4rem; font-weight: 800; color: var(--active-gold); }
+.score-value small { font-size: 0.7rem; margin-left: 2px; }
+.mini-log-text { font-size: 0.6rem; color: #bdc3c7; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 4px; padding-top: 2px; }
 
-.score-header {
-  background: var(--accent-orange);
-  color: white;
-  font-size: 0.8rem;
-  font-weight: bold;
-  padding: 5px 15px;
-  text-align: center;
-}
-
-.score-body {
-  padding: 15px;
-  text-align: center;
-}
-
-.current-points {
-  font-size: 2.2rem;
-  font-weight: 900;
-  color: var(--active-gold);
-}
-
-.win-log {
-  font-size: 0.8rem;
-  color: #bdc3c7;
-  margin-top: 5px;
-}
-
-/* --- メニュー・ボタンの巨大化 --- */
-.main-menu {
-  justify-content: center;
-  height: 100%;
-}
-
-.title-large {
-  font-size: 4.5rem;
-  margin-bottom: 50px;
-  text-shadow: 0 10px 0 var(--dark-orange);
-}
-
+/* --- スタート画面 --- */
+.main-menu { justify-content: center; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.title-large { font-size: 4.5rem; text-shadow: 0 10px 0 var(--dark-orange); margin-bottom: 50px; }
 .mega-button {
-  padding: 20px 60px;
-  font-size: 1.6rem;
-  font-weight: bold;
-  color: white;
+  padding: 18px 50px; font-size: 1.5rem; font-weight: bold; color: white;
   background: linear-gradient(to bottom, var(--light-orange), var(--accent-orange));
-  border: none;
-  border-radius: 50px;
-  cursor: pointer;
-  box-shadow: 0 8px 0 var(--dark-orange);
-  transition: all 0.2s;
-  margin: 15px;
-  min-width: 300px;
+  border: none; border-radius: 50px; cursor: pointer;
+  box-shadow: 0 6px 0 var(--dark-orange); margin: 15px; min-width: 280px;
+  transition: 0.2s;
 }
+.mega-button:hover { transform: translateY(-3px); box-shadow: 0 9px 0 var(--dark-orange); }
+.name-input-large { padding: 15px 30px; font-size: 1.5rem; border-radius: 40px; border: 4px solid var(--accent-orange); margin-bottom: 20px; text-align: center; }
 
-.mega-button:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 0 var(--dark-orange);
-  filter: brightness(1.1);
+/* --- 十字レイアウト --- */
+.playing-field { flex: 1; display: flex; flex-direction: column; justify-content: space-around; padding: 20px 0; }
+.cross-layout-container { display: flex; justify-content: center; align-items: center; gap: 60px; }
+.cross-board {
+  display: grid;
+  grid-template-areas: ". top ." "left center right" ". bottom .";
+  gap: 15px; align-items: center;
 }
+.cross-row.top { grid-area: top; }
+.cross-row.middle { grid-area: center; display: flex; align-items: center; gap: 15px; }
+.cross-row.bottom { grid-area: bottom; }
 
-.mega-button:active {
-  transform: translateY(4px);
-  box-shadow: 0 2px 0 var(--dark-orange);
-}
-
-.name-input-large {
-  padding: 20px 30px;
-  font-size: 1.5rem;
-  border-radius: 40px;
-  border: 4px solid var(--accent-orange);
-  width: 400px;
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-/* --- ゲーム内カード・レイアウト --- */
-.card {
-  width: 100px; /* PC向けに大型化 */
-  height: 140px;
-  background: white;
-  border-radius: 12px;
-  border: 2px solid var(--card-color);
-  box-shadow: 0 8px 15px rgba(0,0,0,0.4);
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.emoji-wrapper { font-size: 3.5rem; }
-
-.playing-field {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 40px 0;
-}
-
-.table-row.middle {
-  justify-content: space-evenly;
-  align-items: center;
-}
-
+/* --- 山札・スロット --- */
 .deck-box {
-  width: 120px;
-  height: 160px;
+  width: 95px; height: 135px;
   background: linear-gradient(135deg, #34495e, #1a252f);
-  border: 5px solid #fff;
-  border-radius: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 10px 20px rgba(0,0,0,0.6);
+  border: 4px solid #fff; border-radius: 15px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; box-shadow: 0 8px 15px rgba(0,0,0,0.5);
 }
+.deck-box.can-draw { border-color: var(--active-gold); animation: pulse 1.5s infinite; }
+.deck-art { font-size: 2.8rem; }
+.slot-card.mini { width: 85px; height: 120px; background: rgba(255,255,255,0.05); border: 2px dashed rgba(255,255,255,0.2); border-radius: 10px; }
 
-.deck-box.can-draw {
-  border-color: var(--active-gold);
-  animation: pulse 1.5s infinite;
+/* --- カードデザイン --- */
+.card {
+  width: 85px; height: 120px; background: white; border-radius: 10px;
+  border: 2px solid var(--card-color); position: relative; cursor: pointer;
+  box-shadow: 0 5px 10px rgba(0,0,0,0.3); transition: 0.2s;
 }
+.card-inner { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 10px 0; }
+.emoji-wrapper { font-size: 2.8rem; }
+.card-category-tag { font-size: 8px; color: white; padding: 2px 6px; border-radius: 3px; position: absolute; top: 5px; left: 5px; }
+.card-name { font-size: 0.75rem; font-weight: bold; color: #333; }
 
-/* --- 自分のダッシュボード --- */
-.my-dashboard {
-  width: 95%;
-  background: rgba(255,255,255,0.05);
-  border-radius: 30px;
-  padding: 25px;
-}
+/* --- プレイヤー名 --- */
+.player-info-box { padding: 10px 20px; border-radius: 20px; background: rgba(0,0,0,0.3); border: 2px solid transparent; }
+.player-info-box.active { border-color: var(--active-gold); box-shadow: 0 0 15px var(--active-gold); }
+.p-name-tag.vertical { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 2px; }
 
-.dashboard-content {
-  display: flex;
-  align-items: center;
-  gap: 50px;
-  justify-content: center;
-}
+/* --- 手札 --- */
+.my-hand-area { width: 100%; padding: 20px; background: rgba(255,255,255,0.03); }
+.my-hand-container { display: flex; gap: 10px; justify-content: center; }
+.card.discardable:hover { transform: translateY(-20px) scale(1.1); z-index: 50; }
+.card.completed { border: 4px solid var(--active-gold); transform: translateY(-5px); }
+.set-label { position: absolute; top: -8px; right: -8px; background: var(--active-gold); color: black; font-size: 9px; padding: 2px 5px; border-radius: 4px; font-weight: bold; }
 
-.my-hand-container {
-  display: flex;
-  gap: 15px;
-}
+/* --- リザルト --- */
+.win-overlay-full { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+.win-card { background: white; color: #333; padding: 40px; border-radius: 30px; text-align: center; width: 450px; }
+.total-score-big { font-size: 4rem; font-weight: 900; color: var(--accent-orange); }
 
-.slot-card {
-  width: 104px;
-  height: 144px;
-  border: 3px dashed rgba(255,255,255,0.2);
-  border-radius: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0,0,0,0.2);
-}
-
-.label-text {
-  font-size: 0.8rem;
-  color: var(--accent-orange);
-  font-weight: bold;
-  display: block;
-  margin-bottom: 8px;
-  text-align: center;
-}
-
-/* --- その他アニメーション等 --- */
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
-
-.card.discardable:hover {
-  transform: translateY(-30px) scale(1.1);
-  z-index: 100;
-}
-
-.win-overlay-full {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.9);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-}
-
-.win-card {
-  background: white;
-  color: #333;
-  padding: 50px;
-  border-radius: 40px;
-  text-align: center;
-  width: 500px;
-}
-
-.total-score-big {
-  font-size: 4rem;
-  font-weight: 900;
-  color: var(--accent-orange);
-}
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
