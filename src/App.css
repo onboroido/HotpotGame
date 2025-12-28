@@ -15,121 +15,123 @@ body {
 }
 
 .game-container {
-  max-width: 1200px; /* PC向けに幅を拡大 */
+  max-width: 1200px;
   margin: 0 auto;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-/* --- カードサイズアップ --- */
+/* --- カードデザイン --- */
 .card {
-  width: 90px;  /* 75pxから拡大 */
-  height: 125px; /* 105pxから拡大 */
+  width: 90px;
+  height: 125px;
   background: white; border-radius: 10px;
   border: 2px solid var(--card-color);
   position: relative; cursor: pointer; color: #333;
   transition: all 0.2s ease;
-  box-shadow: 0 6px 10px rgba(0,0,0,0.3);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+}
+
+.card-inner {
+  height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: space-between;
+  padding: 8px 0;
+  background: radial-gradient(circle at center, rgba(255,255,255,1) 0%, rgba(240,240,240,0.7) 100%);
+  border-radius: 8px;
 }
 
 .emoji-wrapper { font-size: 3.2rem; filter: drop-shadow(2px 4px 5px rgba(0,0,0,0.2)); }
+.card-category-tag { font-size: 10px; color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
+.card-name { font-size: 0.85rem; font-weight: bold; background: rgba(255,255,255,0.9); padding: 2px 8px; border-radius: 10px; }
 
-/* --- PCレイアウトの最適化 --- */
+/* --- レイアウト構造 --- */
 .playing-field {
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 40px 0;
+  justify-content: space-around;
+  padding: 20px 0;
 }
+
+.table-row { display: flex; justify-content: center; width: 100%; gap: 40px; }
 
 .table-row.middle {
-  display: flex;
-  justify-content: space-between; /* 両端にCPUを配置 */
-  align-items: center;
-  width: 100%;
-  max-width: 1000px;
+  max-width: 1100px;
   margin: 0 auto;
+  align-items: center;
+  justify-content: space-evenly;
 }
 
-.center-deck {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.deck-visual {
-  width: 100px;
-  height: 140px;
-  background: linear-gradient(135deg, #7f8c8d 0%, #34495e 100%);
-  border: 4px solid #ecf0f1;
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
+/* --- 自分のエリア (修正ポイント) --- */
+.my-area {
+  width: 90%;
+  max-width: 1000px;
+  padding: 20px;
 }
 
 .my-layout {
   display: flex;
+  flex-direction: column; /* 捨て札と手札を縦に並べる */
   align-items: center;
-  gap: 30px;
-  justify-content: center;
+  gap: 25px;
+}
+
+.my-slot-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.slot-label {
+  font-size: 0.8rem;
+  color: var(--active-color);
+  font-weight: bold;
+  text-transform: uppercase;
 }
 
 .hand {
   display: flex;
-  gap: 8px;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
-/* 捨て牌スロット */
+/* --- スロットと山札 --- */
 .slot-card {
   width: 94px;
   height: 129px;
-  border: 2px dashed rgba(255,255,255,0.2);
-  border-radius: 10px;
+  border: 2px dashed rgba(255,255,255,0.3);
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.1);
+  background: rgba(0,0,0,0.2);
 }
 
-/* 強調表示 */
-.card.completed {
-  border: 4px solid var(--active-color);
-  transform: translateY(-5px);
+.center-deck { display: flex; flex-direction: column; align-items: center; }
+.deck-visual {
+  width: 105px; height: 145px;
+  background: linear-gradient(135deg, #95a5a6 0%, #2c3e50 100%);
+  border: 4px solid #fff; border-radius: 15px;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  cursor: pointer; box-shadow: 0 8px 15px rgba(0,0,0,0.4);
 }
 
-.set-label {
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  background: var(--active-color);
-  color: black;
-  font-weight: bold;
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 5px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-}
+/* --- 状態演出 --- */
+.player-box { background: var(--panel-bg); border-radius: 20px; padding: 15px; border: 2px solid transparent; transition: all 0.3s; }
+.player-box.active { border-color: var(--active-color); box-shadow: 0 0 20px rgba(241, 196, 15, 0.4); }
+.card.discardable:hover { transform: translateY(-20px) scale(1.05); z-index: 10; }
+.card.completed { border: 4px solid var(--active-color); }
 
-/* ボタン関係 */
-.start-button, .mode-button {
-  padding: 18px 50px;
-  font-size: 1.4rem;
-  border-radius: 40px;
-  background: var(--accent-orange);
-  color: white;
-  border: none;
-  box-shadow: 0 6px 0 var(--dark-orange);
-  cursor: pointer;
-}
+/* --- その他 --- */
+.message-log { background: rgba(0,0,0,0.6); padding: 10px 30px; border-radius: 30px; font-size: 1.1rem; margin: 15px auto; }
+.start-button { background: var(--accent-orange); color: white; padding: 15px 40px; border-radius: 30px; border: none; font-weight: bold; cursor: pointer; box-shadow: 0 6px 0 var(--dark-orange); }
+.start-button:hover { background: var(--light-orange); transform: translateY(-2px); }
 
-/* レスポンシブ（スマホ時は少し小さく） */
 @media (max-width: 800px) {
   .card { width: 65px; height: 90px; }
   .emoji-wrapper { font-size: 2rem; }
-  .my-layout { flex-direction: column; gap: 10px; }
+  .table-row { gap: 10px; }
 }
