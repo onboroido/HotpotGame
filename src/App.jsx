@@ -3,7 +3,7 @@ import './App.css'
 import { db } from './firebase'; 
 import { ref, onValue, set, update, push, onDisconnect, serverTimestamp } from "firebase/database";
 
-// 1. カード定義の更新（12種類、新カテゴリー、色の変更）
+// 1. カード定義（12種類、新カテゴリー、最適化された絵文字）
 const CARD_TYPES = [
   { id: 1, name: '人参', category: 'オレンジ', color: '#e67e22', icon: '🥕' },
   { id: 2, name: '玉ねぎ', category: 'オレンジ', color: '#e67e22', icon: '🧅' },
@@ -15,8 +15,8 @@ const CARD_TYPES = [
   { id: 8, name: 'カニ', category: '青', color: '#2980b9', icon: '🦀' },
   { id: 9, name: '魚', category: '青', color: '#2980b9', icon: '🐟' },
   { id: 10, name: '白菜', category: '緑', color: '#27ae60', icon: '🥬' },
-  { id: 11, name: 'ネギ', category: '緑', color: '#27ae60', icon: '🥢' },
-  { id: 12, name: 'ニラ', category: '緑', color: '#27ae60', icon: '🌱' },
+  { id: 11, name: 'ネギ', category: '緑', color: '#27ae60', icon: '🎋' }, // 代用
+  { id: 12, name: 'ニラ', category: '緑', color: '#27ae60', icon: '🌿' }, // 代用
 ];
 
 function App() {
@@ -72,7 +72,7 @@ function App() {
     if (params.get('room')) setGameMode("online");
   }, []);
 
-  // --- CPU思考ロジック (デバッグ修正版) ---
+  // CPU思考ロジック
   useEffect(() => {
     if (gameMode === "cpu" && gameStatus === "playing" && turn !== 0) {
       const timer = setTimeout(() => {
@@ -86,14 +86,12 @@ function App() {
         let picked;
         const prevTurnIdx = (turn === 0) ? 3 : turn - 1;
         
-        // 15%の確率で捨て札を拾う
         if (newSlots[prevTurnIdx] && Math.random() > 0.85) {
           picked = newSlots[prevTurnIdx];
           newSlots[prevTurnIdx] = null;
         } else if (newDeck.length > 0) {
           picked = newDeck.pop();
         } else {
-          // 山札切れ時はスロットから回収
           newDeck = newSlots.filter(s => s !== null).sort(() => Math.random() - 0.5);
           newSlots = [null, null, null, null];
           picked = newDeck.pop();
@@ -127,7 +125,6 @@ function App() {
     }
   }, [turn, gameStatus, gameMode, cpuHands, deck, slots]);
 
-  // --- ヘルパー・アクション ---
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
   
   const getProcessedHand = (currentHand) => {
@@ -136,7 +133,6 @@ function App() {
     const cnt = {}; p.forEach(c => { cnt[c.id] = (cnt[c.id] || 0) + 1; });
     p = p.map(c => cnt[c.id] >= 3 ? { ...c, isCompleted: true } : c);
     
-    // カテゴリー判定を新名称に更新
     ['オレンジ', '赤', '青', '緑'].forEach(cat => {
       const catCards = p.filter(c => c.category === cat && !c.isCompleted);
       const uIds = [...new Set(catCards.map(c => c.id))];
@@ -164,7 +160,6 @@ function App() {
   };
 
   const startAction = () => {
-    // 12種類 × 5枚 = 60枚の山札
     const fullDeck = [];
     CARD_TYPES.forEach(type => {
       for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()});
@@ -193,11 +188,6 @@ function App() {
     setIsJoined(true);
   };
 
-  const copyUrl = () => {
-    navigator.clipboard.writeText(window.location.href);
-    alert("URLをコピーしました！");
-  };
-
   const playerEntries = Object.entries(players).sort((a,b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0));
   const playerIds = playerEntries.map(e => e[0]);
   const myIndex = gameMode === "online" ? playerIds.indexOf(myId) : 0;
@@ -207,16 +197,12 @@ function App() {
     if (turn !== myIndex || hasDrawn || gameStatus !== "playing") return;
     let newDeck = [...deck];
     let newSlots = [...slots];
-
-    // 山札切れ対策
     if (newDeck.length === 0) {
       newDeck = newSlots.filter(s => s !== null).sort(() => Math.random() - 0.5);
       newSlots = [null, null, null, null];
       setGameLog("山札を補充しました");
     }
-
     if (newDeck.length === 0) return alert("カードがありません");
-
     const picked = newDeck.pop();
     if (gameMode === "cpu") {
       setHand(sortHand([...hand, picked])); setDeck(newDeck); setSlots(newSlots); setHasDrawn(true);
@@ -256,13 +242,14 @@ function App() {
     }
   };
 
+  // CardDisplayの修正版：emoji-wrapperを追加
   const CardDisplay = ({ card, onClick, className }) => {
     if (!card) return null;
     return (
       <div className={`card ${className || ""}`} style={{ '--card-color': card.color }} onClick={onClick}>
         <div className="card-inner">
           <div className="card-category-tag" style={{backgroundColor: card.color}}>{card.category}</div>
-          <div className="card-icon">{card.icon}</div>
+          <div className="card-icon emoji-wrapper">{card.icon}</div>
           <div className="card-name">{card.name}</div>
         </div>
         {card.isCompleted && <div className="set-label">SET!</div>}
@@ -275,7 +262,7 @@ function App() {
       <div className="game-container">
         <div className="start-screen">
           <h1 className="title">🍲 Hotpot Game</h1>
-          <button onClick={() => setGameMode("cpu")} className="mode-button">CPUと対戦（1人）</button>
+          <button onClick={() => setGameMode("cpu")} className="mode-button">CPUと対戦</button>
           <button onClick={() => setGameMode("online")} className="mode-button online">オンライン対戦</button>
         </div>
       </div>
@@ -287,9 +274,8 @@ function App() {
       <div className="game-container">
         <div className="start-screen">
           <h2>オンライン対戦</h2>
-          <p className="room-id-display">Room ID: {roomId}</p>
-          <input type="text" value={playerName} onChange={(e)=>setPlayerName(e.target.value)} className="name-input" placeholder="あなたの名前" />
-          <button onClick={joinGame} className="start-button">入室する</button>
+          <input type="text" value={playerName} onChange={(e)=>setPlayerName(e.target.value)} className="name-input" placeholder="名前を入力" />
+          <button onClick={joinGame} className="start-button">入室</button>
         </div>
       </div>
     );
@@ -300,19 +286,7 @@ function App() {
       <div className="top-bar"><span>{gameMode === "online" ? `Room: ${roomId}` : "一人プレイ"}</span></div>
       {gameStatus === "waiting" ? (
         <div className="start-screen">
-          {gameMode === "online" && (
-            <div className="invite-box">
-              <h3>対戦相手を待っています...</h3>
-              <p>参加人数: {playerIds.length} / 4</p>
-              <div className="player-list-mini">
-                {playerEntries.map(([id, p]) => <span key={id} className="mini-tag">● {p.name}</span>)}
-              </div>
-              <button onClick={copyUrl} className="copy-button">招待URLをコピー</button>
-            </div>
-          )}
-          <button onClick={startAction} className="start-button" disabled={gameMode === "online" && playerIds.length < 1}>
-            {gameMode === "cpu" ? "対局開始" : "ゲームを開始する"}
-          </button>
+          <button onClick={startAction} className="start-button">ゲーム開始</button>
         </div>
       ) : (
         <div className="playing-field">
@@ -359,7 +333,6 @@ function App() {
               <hr /><div className="score-total">合計: {lastWinDetails.total} 点</div>
             </div>
             <button onClick={startAction} className="start-button">もう一度</button>
-            <button onClick={() => window.location.reload()} className="start-button secondary">タイトルへ</button>
           </div>
         </div>
       )}
