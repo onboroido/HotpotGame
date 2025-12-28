@@ -1,10 +1,10 @@
 :root {
-  --bg-color: #2c3e50;
+  --bg-color: #1a252f;
   --accent-orange: #e67e22;
   --dark-orange: #d35400;
   --light-orange: #f39c12;
-  --panel-bg: rgba(255, 255, 255, 0.1);
-  --active-color: #f1c40f;
+  --panel-bg: rgba(255, 255, 255, 0.08);
+  --active-gold: #f1c40f;
 }
 
 body {
@@ -12,126 +12,227 @@ body {
   background-color: var(--bg-color);
   font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
   color: white;
+  overflow: hidden;
 }
 
+/* --- PC最適化 (1280px想定) --- */
 .game-container {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
-/* --- カードデザイン --- */
+/* --- 右上のスコアパネル --- */
+.floating-score {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 220px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 2px solid var(--accent-orange);
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+  z-index: 1000;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.score-header {
+  background: var(--accent-orange);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: bold;
+  padding: 5px 15px;
+  text-align: center;
+}
+
+.score-body {
+  padding: 15px;
+  text-align: center;
+}
+
+.current-points {
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: var(--active-gold);
+}
+
+.win-log {
+  font-size: 0.8rem;
+  color: #bdc3c7;
+  margin-top: 5px;
+}
+
+/* --- メニュー・ボタンの巨大化 --- */
+.main-menu {
+  justify-content: center;
+  height: 100%;
+}
+
+.title-large {
+  font-size: 4.5rem;
+  margin-bottom: 50px;
+  text-shadow: 0 10px 0 var(--dark-orange);
+}
+
+.mega-button {
+  padding: 20px 60px;
+  font-size: 1.6rem;
+  font-weight: bold;
+  color: white;
+  background: linear-gradient(to bottom, var(--light-orange), var(--accent-orange));
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  box-shadow: 0 8px 0 var(--dark-orange);
+  transition: all 0.2s;
+  margin: 15px;
+  min-width: 300px;
+}
+
+.mega-button:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 0 var(--dark-orange);
+  filter: brightness(1.1);
+}
+
+.mega-button:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 var(--dark-orange);
+}
+
+.name-input-large {
+  padding: 20px 30px;
+  font-size: 1.5rem;
+  border-radius: 40px;
+  border: 4px solid var(--accent-orange);
+  width: 400px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+/* --- ゲーム内カード・レイアウト --- */
 .card {
-  width: 90px;
-  height: 125px;
-  background: white; border-radius: 10px;
+  width: 100px; /* PC向けに大型化 */
+  height: 140px;
+  background: white;
+  border-radius: 12px;
   border: 2px solid var(--card-color);
-  position: relative; cursor: pointer; color: #333;
-  transition: all 0.2s ease;
-  box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 8px 15px rgba(0,0,0,0.4);
+  cursor: pointer;
+  transition: transform 0.2s;
 }
 
-.card-inner {
-  height: 100%; display: flex; flex-direction: column;
-  align-items: center; justify-content: space-between;
-  padding: 8px 0;
-  background: radial-gradient(circle at center, rgba(255,255,255,1) 0%, rgba(240,240,240,0.7) 100%);
-  border-radius: 8px;
-}
+.emoji-wrapper { font-size: 3.5rem; }
 
-.emoji-wrapper { font-size: 3.2rem; filter: drop-shadow(2px 4px 5px rgba(0,0,0,0.2)); }
-.card-category-tag { font-size: 10px; color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
-.card-name { font-size: 0.85rem; font-weight: bold; background: rgba(255,255,255,0.9); padding: 2px 8px; border-radius: 10px; }
-
-/* --- レイアウト構造 --- */
 .playing-field {
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
-  padding: 20px 0;
+  justify-content: space-between;
+  padding: 40px 0;
 }
-
-.table-row { display: flex; justify-content: center; width: 100%; gap: 40px; }
 
 .table-row.middle {
-  max-width: 1100px;
-  margin: 0 auto;
-  align-items: center;
   justify-content: space-evenly;
-}
-
-/* --- 自分のエリア (修正ポイント) --- */
-.my-area {
-  width: 90%;
-  max-width: 1000px;
-  padding: 20px;
-}
-
-.my-layout {
-  display: flex;
-  flex-direction: column; /* 捨て札と手札を縦に並べる */
   align-items: center;
-  gap: 25px;
 }
 
-.my-slot-section {
+.deck-box {
+  width: 120px;
+  height: 160px;
+  background: linear-gradient(135deg, #34495e, #1a252f);
+  border: 5px solid #fff;
+  border-radius: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-}
-
-.slot-label {
-  font-size: 0.8rem;
-  color: var(--active-color);
-  font-weight: bold;
-  text-transform: uppercase;
-}
-
-.hand {
-  display: flex;
-  gap: 12px;
   justify-content: center;
-  flex-wrap: wrap;
+  cursor: pointer;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.6);
 }
 
-/* --- スロットと山札 --- */
+.deck-box.can-draw {
+  border-color: var(--active-gold);
+  animation: pulse 1.5s infinite;
+}
+
+/* --- 自分のダッシュボード --- */
+.my-dashboard {
+  width: 95%;
+  background: rgba(255,255,255,0.05);
+  border-radius: 30px;
+  padding: 25px;
+}
+
+.dashboard-content {
+  display: flex;
+  align-items: center;
+  gap: 50px;
+  justify-content: center;
+}
+
+.my-hand-container {
+  display: flex;
+  gap: 15px;
+}
+
 .slot-card {
-  width: 94px;
-  height: 129px;
-  border: 2px dashed rgba(255,255,255,0.3);
-  border-radius: 12px;
+  width: 104px;
+  height: 144px;
+  border: 3px dashed rgba(255,255,255,0.2);
+  border-radius: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(0,0,0,0.2);
 }
 
-.center-deck { display: flex; flex-direction: column; align-items: center; }
-.deck-visual {
-  width: 105px; height: 145px;
-  background: linear-gradient(135deg, #95a5a6 0%, #2c3e50 100%);
-  border: 4px solid #fff; border-radius: 15px;
-  display: flex; flex-direction: column; justify-content: center; align-items: center;
-  cursor: pointer; box-shadow: 0 8px 15px rgba(0,0,0,0.4);
+.label-text {
+  font-size: 0.8rem;
+  color: var(--accent-orange);
+  font-weight: bold;
+  display: block;
+  margin-bottom: 8px;
+  text-align: center;
 }
 
-/* --- 状態演出 --- */
-.player-box { background: var(--panel-bg); border-radius: 20px; padding: 15px; border: 2px solid transparent; transition: all 0.3s; }
-.player-box.active { border-color: var(--active-color); box-shadow: 0 0 20px rgba(241, 196, 15, 0.4); }
-.card.discardable:hover { transform: translateY(-20px) scale(1.05); z-index: 10; }
-.card.completed { border: 4px solid var(--active-color); }
+/* --- その他アニメーション等 --- */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
 
-/* --- その他 --- */
-.message-log { background: rgba(0,0,0,0.6); padding: 10px 30px; border-radius: 30px; font-size: 1.1rem; margin: 15px auto; }
-.start-button { background: var(--accent-orange); color: white; padding: 15px 40px; border-radius: 30px; border: none; font-weight: bold; cursor: pointer; box-shadow: 0 6px 0 var(--dark-orange); }
-.start-button:hover { background: var(--light-orange); transform: translateY(-2px); }
+.card.discardable:hover {
+  transform: translateY(-30px) scale(1.1);
+  z-index: 100;
+}
 
-@media (max-width: 800px) {
-  .card { width: 65px; height: 90px; }
-  .emoji-wrapper { font-size: 2rem; }
-  .table-row { gap: 10px; }
+.win-overlay-full {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.win-card {
+  background: white;
+  color: #333;
+  padding: 50px;
+  border-radius: 40px;
+  text-align: center;
+  width: 500px;
+}
+
+.total-score-big {
+  font-size: 4rem;
+  font-weight: 900;
+  color: var(--accent-orange);
 }
