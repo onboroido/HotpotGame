@@ -12,86 +12,124 @@ body {
   background-color: var(--bg-color);
   font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
   color: white;
-  overflow-x: hidden;
 }
 
 .game-container {
-  max-width: 800px; margin: 0 auto; min-height: 100vh;
-  display: flex; flex-direction: column; align-items: center;
+  max-width: 1200px; /* PC向けに幅を拡大 */
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-/* --- オレンジのボタンデザイン --- */
-.mode-button, .start-button {
-  padding: 15px 40px; font-size: 1.2rem; cursor: pointer;
-  border: none; border-radius: 30px; 
-  background: var(--accent-orange); color: white; font-weight: bold;
-  box-shadow: 0 5px 0 var(--dark-orange);
-  transition: all 0.2s ease; margin: 10px;
-}
-
-.mode-button.online { background: var(--dark-orange); box-shadow: 0 5px 0 #a04000; }
-
-.mode-button:hover, .start-button:hover {
-  transform: translateY(-2px); background: var(--light-orange);
-  box-shadow: 0 7px 0 var(--dark-orange);
-}
-
-.mode-button:active, .start-button:active {
-  transform: translateY(3px); box-shadow: 0 2px 0 var(--dark-orange);
-}
-
-/* 招待URLコピーボタン（青色にして区別） */
-.copy-button {
-  background: #3498db !important;
-  box-shadow: 0 5px 0 #2980b9 !important;
-  padding: 10px 20px !important;
-  font-size: 0.9rem !important;
-  border-radius: 20px !important;
-  border: none; color: white; cursor: pointer; font-weight: bold;
-}
-
-/* --- オンライン待機画面 --- */
-.invite-box {
-  background: rgba(0,0,0,0.3); padding: 25px; border-radius: 20px;
-  margin-bottom: 20px; border: 2px solid var(--accent-orange);
-}
-
-.player-list-mini { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
-.mini-name-tag { background: var(--accent-orange); padding: 4px 12px; border-radius: 15px; font-size: 0.8rem; }
-
-.name-input {
-  padding: 12px 25px; font-size: 1.1rem; border-radius: 25px;
-  border: 3px solid var(--accent-orange); background: white; color: #333;
-  outline: none; margin-bottom: 15px; text-align: center;
-}
-
-/* --- カード・プレイ画面 --- */
+/* --- カードサイズアップ --- */
 .card {
-  width: 75px; height: 105px; background: white; border-radius: 8px;
-  border: 2px solid var(--card-color); position: relative; cursor: pointer; color: #333;
-  transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+  width: 90px;  /* 75pxから拡大 */
+  height: 125px; /* 105pxから拡大 */
+  background: white; border-radius: 10px;
+  border: 2px solid var(--card-color);
+  position: relative; cursor: pointer; color: #333;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 10px rgba(0,0,0,0.3);
 }
 
-.card-inner {
-  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between;
-  padding: 5px 0; background: radial-gradient(circle at center, rgba(255,255,255,1) 0%, rgba(240,240,240,0.7) 100%);
-  border-radius: 6px;
+.emoji-wrapper { font-size: 3.2rem; filter: drop-shadow(2px 4px 5px rgba(0,0,0,0.2)); }
+
+/* --- PCレイアウトの最適化 --- */
+.playing-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 40px 0;
 }
 
-.emoji-wrapper { font-size: 2.5rem; filter: drop-shadow(2px 3px 4px rgba(0,0,0,0.2)); }
-.card-category-tag { font-size: 9px; color: white; padding: 1px 6px; border-radius: 4px; font-weight: bold; }
-.card-name { font-size: 0.75rem; font-weight: bold; background: rgba(255,255,255,0.9); padding: 1px 6px; border-radius: 10px; }
+.table-row.middle {
+  display: flex;
+  justify-content: space-between; /* 両端にCPUを配置 */
+  align-items: center;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+}
 
-.playing-field { width: 100%; flex: 1; display: flex; flex-direction: column; justify-content: space-around; }
-.table-row { display: flex; justify-content: center; gap: 20px; }
-.hand { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; padding: 20px; }
-.player-box { background: var(--panel-bg); padding: 10px; border-radius: 15px; text-align: center; border: 2px solid transparent; }
-.player-box.active { border-color: var(--active-color); box-shadow: 0 0 15px var(--active-color); }
-.message-log { background: rgba(0,0,0,0.5); padding: 5px 20px; border-radius: 20px; margin: 10px auto; font-weight: bold; }
+.center-deck {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
 
-/* --- 終了・リザルト --- */
-.win-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.win-message { background: white; color: #333; padding: 40px; border-radius: 25px; text-align: center; }
-.score-total { font-size: 1.8rem; font-weight: bold; color: var(--accent-orange); }
+.deck-visual {
+  width: 100px;
+  height: 140px;
+  background: linear-gradient(135deg, #7f8c8d 0%, #34495e 100%);
+  border: 4px solid #ecf0f1;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+}
 
-.title { font-size: 3.5rem; text-shadow: 3px 3px 0px var(--dark-orange); margin-top: 50px; }
+.my-layout {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  justify-content: center;
+}
+
+.hand {
+  display: flex;
+  gap: 8px;
+}
+
+/* 捨て牌スロット */
+.slot-card {
+  width: 94px;
+  height: 129px;
+  border: 2px dashed rgba(255,255,255,0.2);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.1);
+}
+
+/* 強調表示 */
+.card.completed {
+  border: 4px solid var(--active-color);
+  transform: translateY(-5px);
+}
+
+.set-label {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: var(--active-color);
+  color: black;
+  font-weight: bold;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* ボタン関係 */
+.start-button, .mode-button {
+  padding: 18px 50px;
+  font-size: 1.4rem;
+  border-radius: 40px;
+  background: var(--accent-orange);
+  color: white;
+  border: none;
+  box-shadow: 0 6px 0 var(--dark-orange);
+  cursor: pointer;
+}
+
+/* レスポンシブ（スマホ時は少し小さく） */
+@media (max-width: 800px) {
+  .card { width: 65px; height: 90px; }
+  .emoji-wrapper { font-size: 2rem; }
+  .my-layout { flex-direction: column; gap: 10px; }
+}
