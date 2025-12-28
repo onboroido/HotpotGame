@@ -1,11 +1,10 @@
-/* --- 全体のレイアウト設定 --- */
 :root {
-  --bg-color: #2c3e50;         /* 背景：深いネイビー */
-  --accent-orange: #e67e22;   /* メインのオレンジ */
-  --dark-orange: #d35400;     /* 影用の濃いオレンジ */
-  --light-orange: #f39c12;    /* ホバー用の明るいオレンジ */
+  --bg-color: #2c3e50;
+  --accent-orange: #e67e22;
+  --dark-orange: #d35400;
+  --light-orange: #f39c12;
   --panel-bg: rgba(255, 255, 255, 0.1);
-  --active-color: #f1c40f;    /* 自分のターンの強調色 */
+  --active-color: #f1c40f;
 }
 
 body {
@@ -17,123 +16,82 @@ body {
 }
 
 .game-container {
-  max-width: 800px; margin: 0 auto;
-  min-height: 100vh;
+  max-width: 800px; margin: 0 auto; min-height: 100vh;
   display: flex; flex-direction: column; align-items: center;
 }
 
-/* --- ボタン・入力欄のデザイン (ここをオレンジに変更) --- */
+/* --- オレンジのボタンデザイン --- */
 .mode-button, .start-button {
-  padding: 15px 40px; 
-  font-size: 1.2rem; 
-  cursor: pointer;
-  border: none; 
-  border-radius: 30px; 
-  background: var(--accent-orange); 
-  color: white; 
-  font-weight: bold;
-  box-shadow: 0 5px 0 var(--dark-orange); /* ボタンの厚み */
-  transition: all 0.2s ease;
-  margin: 10px;
+  padding: 15px 40px; font-size: 1.2rem; cursor: pointer;
+  border: none; border-radius: 30px; 
+  background: var(--accent-orange); color: white; font-weight: bold;
+  box-shadow: 0 5px 0 var(--dark-orange);
+  transition: all 0.2s ease; margin: 10px;
 }
 
-.mode-button.online { 
-  background: var(--dark-orange); 
-  box-shadow: 0 5px 0 #a04000;
-}
+.mode-button.online { background: var(--dark-orange); box-shadow: 0 5px 0 #a04000; }
 
 .mode-button:hover, .start-button:hover {
-  transform: translateY(-2px);
-  background: var(--light-orange);
+  transform: translateY(-2px); background: var(--light-orange);
   box-shadow: 0 7px 0 var(--dark-orange);
 }
 
 .mode-button:active, .start-button:active {
-  transform: translateY(3px);
-  box-shadow: 0 2px 0 var(--dark-orange);
+  transform: translateY(3px); box-shadow: 0 2px 0 var(--dark-orange);
 }
+
+/* 招待URLコピーボタン（青色にして区別） */
+.copy-button {
+  background: #3498db !important;
+  box-shadow: 0 5px 0 #2980b9 !important;
+  padding: 10px 20px !important;
+  font-size: 0.9rem !important;
+  border-radius: 20px !important;
+  border: none; color: white; cursor: pointer; font-weight: bold;
+}
+
+/* --- オンライン待機画面 --- */
+.invite-box {
+  background: rgba(0,0,0,0.3); padding: 25px; border-radius: 20px;
+  margin-bottom: 20px; border: 2px solid var(--accent-orange);
+}
+
+.player-list-mini { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.mini-name-tag { background: var(--accent-orange); padding: 4px 12px; border-radius: 15px; font-size: 0.8rem; }
 
 .name-input {
-  padding: 12px 25px;
-  font-size: 1.1rem;
-  border-radius: 25px;
-  border: 3px solid var(--accent-orange);
-  background: white;
-  color: #333;
-  outline: none;
-  margin-bottom: 15px;
-  text-align: center;
+  padding: 12px 25px; font-size: 1.1rem; border-radius: 25px;
+  border: 3px solid var(--accent-orange); background: white; color: #333;
+  outline: none; margin-bottom: 15px; text-align: center;
 }
 
-/* --- カードのデザイン --- */
+/* --- カード・プレイ画面 --- */
 .card {
-  width: 75px; height: 105px;
-  background: white; border-radius: 8px;
-  border: 2px solid var(--card-color);
-  position: relative; cursor: pointer; color: #333;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+  width: 75px; height: 105px; background: white; border-radius: 8px;
+  border: 2px solid var(--card-color); position: relative; cursor: pointer; color: #333;
+  transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
 }
 
 .card-inner {
-  height: 100%; display: flex; flex-direction: column;
-  align-items: center; justify-content: space-between;
-  padding: 5px 0;
-  background: radial-gradient(circle at center, rgba(255,255,255,1) 0%, rgba(240,240,240,0.7) 100%);
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  padding: 5px 0; background: radial-gradient(circle at center, rgba(255,255,255,1) 0%, rgba(240,240,240,0.7) 100%);
   border-radius: 6px;
 }
 
-.card-category-tag {
-  font-size: 9px; color: white; padding: 1px 6px;
-  border-radius: 4px; font-weight: bold;
-}
+.emoji-wrapper { font-size: 2.5rem; filter: drop-shadow(2px 3px 4px rgba(0,0,0,0.2)); }
+.card-category-tag { font-size: 9px; color: white; padding: 1px 6px; border-radius: 4px; font-weight: bold; }
+.card-name { font-size: 0.75rem; font-weight: bold; background: rgba(255,255,255,0.9); padding: 1px 6px; border-radius: 10px; }
 
-.emoji-wrapper {
-  font-size: 2.5rem; display: flex; align-items: center; justify-content: center;
-  flex: 1; filter: drop-shadow(2px 3px 4px rgba(0,0,0,0.2));
-}
-
-.card-name {
-  font-size: 0.75rem; font-weight: bold; color: #444;
-  background: rgba(255,255,255,0.9); padding: 1px 6px; border-radius: 10px;
-}
-
-/* --- アニメーション・状態 --- */
-.card.discardable:hover { transform: translateY(-15px); }
-.card.discardable .emoji-wrapper { animation: float 2s ease-in-out infinite; }
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
-}
-
-.deck-visual.can-draw {
-  animation: pulse 1.5s infinite;
-  border: 3px solid var(--active-color);
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-}
-
-/* --- ゲーム画面のレイアウト --- */
 .playing-field { width: 100%; flex: 1; display: flex; flex-direction: column; justify-content: space-around; }
 .table-row { display: flex; justify-content: center; gap: 20px; }
 .hand { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; padding: 20px; }
 .player-box { background: var(--panel-bg); padding: 10px; border-radius: 15px; text-align: center; border: 2px solid transparent; }
 .player-box.active { border-color: var(--active-color); box-shadow: 0 0 15px var(--active-color); }
-.slot-card { width: 80px; height: 110px; border: 2px dashed rgba(255,255,255,0.3); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
 .message-log { background: rgba(0,0,0,0.5); padding: 5px 20px; border-radius: 20px; margin: 10px auto; font-weight: bold; }
 
-/* --- 終了・リザルト画面 --- */
+/* --- 終了・リザルト --- */
 .win-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.win-message { 
-  background: white; color: #333; padding: 40px; border-radius: 25px; text-align: center; 
-  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-}
-.score-total { font-size: 1.8rem; font-weight: bold; color: var(--accent-orange); margin: 10px 0; }
-.score-item { color: #666; margin: 3px 0; }
+.win-message { background: white; color: #333; padding: 40px; border-radius: 25px; text-align: center; }
+.score-total { font-size: 1.8rem; font-weight: bold; color: var(--accent-orange); }
 
-.top-bar { width: 100%; padding: 10px; background: rgba(0,0,0,0.3); text-align: center; font-size: 0.9rem; }
-.title { font-size: 3.5rem; text-shadow: 3px 3px 0px var(--dark-orange); margin-bottom: 30px; }
+.title { font-size: 3.5rem; text-shadow: 3px 3px 0px var(--dark-orange); margin-top: 50px; }
