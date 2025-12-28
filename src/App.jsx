@@ -76,6 +76,70 @@ function App() {
     }
   }, []);
 
+  // --- CPU思考ロジック (デバッグ修正版) ---
+  useEffect(() => {
+    // CPU戦かつ、ゲーム進行中かつ、ターンが自分の番(0)以外の場合に実行
+    if (gameMode === "cpu" && gameStatus === "playing" && turn !== 0) {
+      console.log(`CPU ${turn} の思考開始`); // 動作確認用のログ
+
+      const timer = setTimeout(() => {
+        // 1. 現在のCPUの情報を取得
+        let currentCpuIdx = turn - 1; 
+        if (!cpuHands[currentCpuIdx]) return; // 安全策
+
+        let h = [...cpuHands[currentCpuIdx]];
+        let newDeck = [...deck];
+        let newSlots = [...slots];
+        
+        // 2. カードを引く
+        let picked;
+        const prevTurnIdx = (turn === 0) ? 3 : turn - 1;
+        
+        // 15%の確率で捨て札を拾う、それ以外は山札から
+        if (newSlots[prevTurnIdx] && Math.random() > 0.85) {
+          picked = newSlots[prevTurnIdx];
+          newSlots[prevTurnIdx] = null;
+          setGameLog(`CPU ${turn}が捨て札を拾いました`);
+        } else if (newDeck.length > 0) {
+          picked = newDeck.pop();
+        } else {
+          setGameLog("山札切れです");
+          setGameStatus("finished");
+          return;
+        }
+
+        // 3. 手札に加えてから1枚捨てる
+        h.push(picked);
+        const dIdx = Math.floor(Math.random() * h.length);
+        const discarded = h.splice(dIdx, 1)[0];
+        newSlots[turn] = discarded;
+
+        // 4. 状態を更新
+        setCpuHands(prev => {
+          let n = [...prev];
+          n[currentCpuIdx] = h;
+          return n;
+        });
+        setSlots(newSlots);
+        setDeck(newDeck);
+        setGameLog(`CPU ${turn}が${discarded.name}を捨てました`);
+
+        // 5. 勝利判定
+        const processed = getProcessedHand(h);
+        if (processed.filter(c => c.isCompleted).length === 9) {
+          setGameStatus("finished");
+          setLastWinDetails(calculateScore(h, false));
+          setGameLog(`CPU ${turn}の上がり！`);
+        } else {
+          // 6. 次のターンへ
+          setTurn((turn + 1) % 4);
+        }
+      }, 1000); 
+
+      return () => clearTimeout(timer);
+    }
+  }, [turn, gameStatus, gameMode, cpuHands, deck, slots]);
+
   // --- ヘルパー・アクション (前回のロジックを維持) ---
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
   const getProcessedHand = (currentHand) => {
