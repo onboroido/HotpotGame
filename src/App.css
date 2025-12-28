@@ -15,61 +15,50 @@ body {
 }
 
 .game-container {
-  max-width: 1280px;
-  margin: 0 auto;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  position: relative;
+  max-width: 1280px; margin: 0 auto; height: 100vh;
+  display: flex; flex-direction: column; position: relative;
 }
 
-/* --- 小型・最右端スコアUI --- */
+/* スコア */
 .compact-score-badge {
-  position: absolute; 
-  top: 10px; 
-  right: 5px; 
-  background: rgba(0, 0, 0, 0.7);
-  border-left: 3px solid var(--accent-orange);
-  padding: 6px 12px; 
-  border-radius: 4px 8px 8px 4px;
-  backdrop-filter: blur(8px); 
-  z-index: 1000; 
-  min-width: 110px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-  pointer-events: none; 
+  position: absolute; top: 10px; right: 5px; background: rgba(0, 0, 0, 0.7);
+  border-left: 3px solid var(--accent-orange); padding: 6px 12px;
+  border-radius: 4px 8px 8px 4px; backdrop-filter: blur(8px); z-index: 1000;
+  min-width: 110px; pointer-events: none;
 }
-
-.score-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.score-label { font-size: 0.6rem; font-weight: bold; color: var(--accent-orange); letter-spacing: 0.5px; }
 .score-value { font-size: 1.2rem; font-weight: 800; color: var(--active-gold); }
-.score-value small { font-size: 0.6rem; margin-left: 2px; }
-.mini-log-text { font-size: 0.55rem; color: #bdc3c7; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 3px; padding-top: 2px; text-align: right; }
 
-/* --- センター十字ボード --- */
-.playing-field { flex: 1; display: flex; flex-direction: column; justify-content: space-around; padding: 20px 0; }
-.cross-layout-container { display: flex; justify-content: center; align-items: center; gap: 60px; }
-.cross-board {
-  display: grid;
-  grid-template-areas: ". top ." "left center right" ". bottom .";
-  gap: 15px; align-items: center;
+/* レイアウト */
+.playing-field { flex: 1; display: flex; flex-direction: column; justify-content: space-around; padding: 10px 0; }
+
+.center-board-wrapper {
+  display: flex; align-items: center; justify-content: center; gap: 40px;
 }
-.cross-row.top { grid-area: top; }
-.cross-row.middle { grid-area: center; display: flex; align-items: center; gap: 15px; }
-.cross-row.bottom { grid-area: bottom; }
 
-.deck-box {
-  width: 95px; height: 135px;
-  background: linear-gradient(135deg, #34495e, #1a252f);
-  border: 4px solid #fff; border-radius: 15px;
-  display: flex; align-items: center; justify-content: center;
+/* 3x3 グリッドによる厳密な十字配置 */
+.cross-grid {
+  display: grid;
+  grid-template-columns: 85px 100px 85px;
+  grid-template-rows: 120px 140px 120px;
+  gap: 20px;
+  align-items: center;
+  justify-items: center;
+}
+
+.grid-cell.slot {
+  width: 85px; height: 120px; background: rgba(255,255,255,0.05);
+  border: 1px dashed rgba(255,255,255,0.2); border-radius: 10px;
+}
+
+.deck-cell {
+  width: 100px; height: 140px; background: linear-gradient(135deg, #34495e, #1a252f);
+  border: 4px solid #fff; border-radius: 15px; display: flex; align-items: center; justify-content: center;
   cursor: pointer; box-shadow: 0 8px 15px rgba(0,0,0,0.5);
 }
-.deck-box.can-draw { border-color: var(--active-gold); animation: pulse 1.5s infinite; }
+.deck-cell.can-draw { border-color: var(--active-gold); animation: pulse 1.5s infinite; }
 .deck-art { font-size: 2.8rem; }
 
-.slot-card.mini { width: 85px; height: 120px; background: rgba(255,255,255,0.05); border: 2px dashed rgba(255,255,255,0.2); border-radius: 10px; }
-
-/* --- カード --- */
+/* カードデザイン */
 .card {
   width: 85px; height: 120px; background: white; border-radius: 10px;
   border: 2px solid var(--card-color); position: relative; cursor: pointer;
@@ -80,28 +69,15 @@ body {
 .card-category-tag { font-size: 8px; color: white; padding: 2px 6px; border-radius: 3px; position: absolute; top: 5px; left: 5px; }
 .card-name { font-size: 0.75rem; font-weight: bold; color: #333; }
 
-/* --- プレイヤー --- */
+/* プレイヤー表示 */
 .player-info-box { padding: 8px 18px; border-radius: 20px; background: rgba(0,0,0,0.3); border: 2px solid transparent; }
 .player-info-box.active { border-color: var(--active-gold); box-shadow: 0 0 15px var(--active-gold); }
-.p-name-tag.vertical { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 2px; font-size: 0.9rem; }
+.p-name-tag.vertical { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 2px; }
 
-/* --- 手札 --- */
+/* 手札 */
 .my-hand-area { width: 100%; padding: 20px; background: rgba(255,255,255,0.03); border-top: 1px solid rgba(255,255,255,0.1); }
 .my-hand-container { display: flex; gap: 10px; justify-content: center; }
 .card.discardable:hover { transform: translateY(-20px) scale(1.1); z-index: 50; }
 .card.completed { border: 4px solid var(--active-gold); transform: translateY(-5px); }
-.set-label { position: absolute; top: -8px; right: -8px; background: var(--active-gold); color: black; font-size: 9px; padding: 2px 5px; border-radius: 4px; font-weight: bold; }
-
-/* --- その他 --- */
-.title-large { font-size: 4.5rem; text-shadow: 0 10px 0 var(--dark-orange); margin-bottom: 50px; text-align: center; }
-.mega-button {
-  padding: 18px 50px; font-size: 1.5rem; font-weight: bold; color: white;
-  background: linear-gradient(to bottom, var(--light-orange), var(--accent-orange));
-  border: none; border-radius: 50px; cursor: pointer;
-  box-shadow: 0 6px 0 var(--dark-orange); margin: 15px; min-width: 280px;
-}
-.win-overlay-full { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 2000; }
-.win-card { background: white; color: #333; padding: 40px; border-radius: 30px; text-align: center; width: 450px; }
-.total-score-big { font-size: 4rem; font-weight: 900; color: var(--accent-orange); }
 
 @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }

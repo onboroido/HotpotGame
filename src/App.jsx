@@ -278,55 +278,57 @@ function App() {
       
       {gameStatus === "waiting" ? (
         <div className="start-screen centered">
-          {gameMode === "online" && (
-            <div className="invite-card">
-              <h3>参加待ち... ({pIds.length}/4)</h3>
-              <div className="mini-player-grid">
-                {pIds.map(id => <span key={id} className="name-badge">● {players[id].name}</span>)}
-              </div>
-              <button onClick={() => { navigator.clipboard.writeText(window.location.href); alert("コピーしました！"); }} className="copy-btn-orange">URLをコピー</button>
-            </div>
-          )}
           <button onClick={startAction} className="mega-button">ゲーム開始</button>
         </div>
       ) : (
         <div className="playing-field">
-          {/* 上(対面): インデックス +2 */}
+          {/* 上(CPU 2) */}
           <div className="table-row">
             <div className={`player-info-box ${(turn === (mIdx + 2) % 4) ? 'active' : ''}`}>
               <div className="p-name-tag">{gameMode === "online" ? (players[pIds[(mIdx+2)%4]]?.name || "CPU 2") : "CPU 2"}</div>
             </div>
           </div>
 
-          <div className="cross-layout-container">
-            {/* 左(下家): インデックス +1 */}
-            <div className={`player-info-box side ${(turn === (mIdx + 1) % 4) ? 'active' : ''}`}>
-              <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+1)%4]]?.name || "CPU 1") : "CPU 1"}</div>
-            </div>
+          <div className="center-board-wrapper">
+             {/* 左(CPU 1) プレイヤーラベル */}
+             <div className={`player-info-box side left-side ${(turn === (mIdx + 1) % 4) ? 'active' : ''}`}>
+               <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+1)%4]]?.name || "CPU 1") : "CPU 1"}</div>
+             </div>
 
-            <div className="cross-board">
-              <div className="cross-row top">
-                <div className="slot-card mini" onClick={() => pickFromSlotAction((mIdx + 2) % 4)}><CardDisplay card={slots[(mIdx + 2) % 4]} /></div>
-              </div>
-              <div className="cross-row middle">
-                {/* 左: CPU 1 */}
-                <div className="slot-card mini" onClick={() => pickFromSlotAction((mIdx + 1) % 4)}><CardDisplay card={slots[(mIdx + 1) % 4]} /></div>
-                <div className={`deck-box ${(turn === mIdx && !hasDrawn) ? 'can-draw' : ''}`} onClick={drawAction}>
-                  <div className="deck-art">🎴</div>
+             {/* 中央の十字ボード */}
+             <div className="cross-grid">
+                <div className="grid-cell empty"></div>
+                {/* 上スロット(CPU 2) */}
+                <div className="grid-cell slot top-slot" onClick={() => pickFromSlotAction((mIdx + 2) % 4)}>
+                  <CardDisplay card={slots[(mIdx + 2) % 4]} />
                 </div>
-                {/* 右: CPU 3 */}
-                <div className="slot-card mini" onClick={() => pickFromSlotAction((mIdx + 3) % 4)}><CardDisplay card={slots[(mIdx + 3) % 4]} /></div>
-              </div>
-              <div className="cross-row bottom">
-                {/* 下: 自分 */}
-                <div className="slot-card mini" onClick={() => pickFromSlotAction(mIdx)}><CardDisplay card={slots[mIdx]} /></div>
-              </div>
-            </div>
+                <div className="grid-cell empty"></div>
 
-            {/* 右(上家): インデックス +3 */}
-            <div className={`player-info-box side ${(turn === (mIdx + 3) % 4) ? 'active' : ''}`}>
-              <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "CPU 3") : "CPU 3"}</div>
-            </div>
+                {/* 左スロット(CPU 1) */}
+                <div className="grid-cell slot left-slot" onClick={() => pickFromSlotAction((mIdx + 1) % 4)}>
+                  <CardDisplay card={slots[(mIdx + 1) % 4]} />
+                </div>
+                {/* 中央：山札 */}
+                <div className={`grid-cell deck-cell ${(turn === mIdx && !hasDrawn) ? 'can-draw' : ''}`} onClick={drawAction}>
+                   <div className="deck-art">🎴</div>
+                </div>
+                {/* 右スロット(CPU 3) */}
+                <div className="grid-cell slot right-slot" onClick={() => pickFromSlotAction((mIdx + 3) % 4)}>
+                  <CardDisplay card={slots[(mIdx + 3) % 4]} />
+                </div>
+
+                <div className="grid-cell empty"></div>
+                {/* 下スロット(自分) */}
+                <div className="grid-cell slot bottom-slot" onClick={() => pickFromSlotAction(mIdx)}>
+                  <CardDisplay card={slots[mIdx]} />
+                </div>
+                <div className="grid-cell empty"></div>
+             </div>
+
+             {/* 右(CPU 3) プレイヤーラベル */}
+             <div className={`player-info-box side right-side ${(turn === (mIdx + 3) % 4) ? 'active' : ''}`}>
+               <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "CPU 3") : "CPU 3"}</div>
+             </div>
           </div>
 
           <div className="table-row bottom">
@@ -346,9 +348,6 @@ function App() {
           <div className="win-card">
             <h2 className="win-title">AGARI!</h2>
             <div className="total-score-big">{lastWinDetails.total} <small>pt</small></div>
-            <div className="win-breakdown-list">
-              {lastWinDetails.breakdown?.map((text, i) => <div key={i} className="breakdown-row">{text}</div>)}
-            </div>
             <button onClick={startAction} className="mega-button">NEXT GAME</button>
           </div>
         </div>
