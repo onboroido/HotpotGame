@@ -30,7 +30,6 @@ function App() {
   const [slots, setSlots] = useState([null, null, null, null]);
   const [turn, setTurn] = useState(0);
   const [round, setRound] = useState(1);
-  const [gameLog, setGameLog] = useState("準備中...");
   const [hasDrawn, setHasDrawn] = useState(false);
   const [lastWinDetails, setLastWinDetails] = useState(null);
   const [hand, setHand] = useState([]); 
@@ -40,7 +39,6 @@ function App() {
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
 
-  // --- 判定ロジック ---
   const getProcessedHand = (currentHand) => {
     if (!currentHand || currentHand.length === 0) return [];
     let p = currentHand.map(c => ({ ...c, isCompleted: false }));
@@ -80,18 +78,28 @@ function App() {
   const finalizeGameScores = (winnerId = null) => {
     const pIds = Object.keys(players);
     const updates = {};
+    const roundHands = {}; // 全員の手札を保存用
+
     pIds.forEach(id => {
       const isWinner = (id === winnerId);
       const scoreData = calculateScore(players[id].hand || [], isWinner);
       updates[`players/${id}/score`] = (players[id].score || 0) + scoreData.total;
+      // 公開用に今の手札をコピー
+      roundHands[id] = {
+        name: players[id].name,
+        hand: players[id].hand || [],
+        isWinner: isWinner,
+        roundScore: scoreData.total
+      };
     });
+
     updates.status = "finished";
+    updates.lastRoundHands = roundHands; // 全員に公開するデータ
     const winHand = winnerId ? (players[winnerId].hand || []) : [];
     updates.lastWinDetails = calculateScore(winHand, true); 
     update(ref(db, `rooms/${roomId}`), updates);
   };
 
-  // --- CPU思考 ---
   useEffect(() => {
     if (gameStatus !== "playing") return;
     const runCpuTurn = async () => {
@@ -139,7 +147,6 @@ function App() {
     runCpuTurn();
   }, [turn, hasDrawn, gameStatus, gameMode, deck, players, roomId, myId]);
 
-  // --- ゲーム管理 ---
   const startAction = useCallback(async (resetGame = false) => {
     setShowFinalResult(false);
     const fullDeck = [];
@@ -167,6 +174,7 @@ function App() {
       updates.turn = 0;
       updates.hasDrawn = false;
       updates.lastWinDetails = null;
+      updates.lastRoundHands = null; // リセット
       await update(ref(db, `rooms/${roomId}`), updates);
     } else {
       if (resetGame) setTotalScore(0);
@@ -181,6 +189,8 @@ function App() {
     }
   }, [gameMode, round, players, roomId]);
 
+  const [lastRoundHands, setLastRoundHands] = useState(null);
+
   useEffect(() => {
     if (gameMode !== "online" || !roomId) return;
     return onValue(ref(db, `rooms/${roomId}`), (s) => {
@@ -194,10 +204,10 @@ function App() {
       setRound(d.round || 1);
       setHasDrawn(d.hasDrawn || false);
       if (d.lastWinDetails) setLastWinDetails(d.lastWinDetails);
+      if (d.lastRoundHands) setLastRoundHands(d.lastRoundHands);
     });
   }, [gameMode, roomId]);
 
-  // --- アクション ---
   const drawAction = () => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
@@ -350,16 +360,36 @@ function App() {
       )}
 
       {gameStatus === "finished" && !showFinalResult && (
-        <div className="win-overlay">
-          <div className="win-card">
-            <h2 className="win-title">{checkWin(curHand) ? "いただきます！" : "ごちそうさま！"}</h2>
-            <p className="round-score-label">Round {round} Score</p>
-            <div className="win-score-display"><span className="win-score-val">+{myRoundScore}</span><span className="win-score-unit">pt</span></div>
-            {round < 3 ? (
-              <button onClick={() => startAction(false)} className="mega-button">次のラウンドへ</button>
-            ) : (
-              <button onClick={() => setShowFinalResult(true)} className="mega-button primary">最終結果を見る</button>
-            )}
+        <div className="win-overlay scrollable">
+          <div className="win-card wide">
+            <h2 className="win-title">ラウンド終了！</h2>
+            
+            <div className="open-hands-container">
+              {lastRoundHands && Object.entries(lastRoundHands).map(([id, data]) => (
+                <div key={id} className={`open-player-row ${data.isWinner ? 'winner-row' : ''}`}>
+                  <div className="open-player-info">
+                    <span className="open-player-name">{data.name}</span>
+                    <span className="open-player-score">+{data.roundScore}pt</span>
+                  </div>
+                  <div className="open-hand-cards">
+                    {getProcessedHand(data.hand).map((c, i) => (
+                      <div key={i} className="mini-card" style={{'--card-color': c.color}}>
+                        <span>{c.icon}</span>
+                        {c.isCompleted && <div className="mini-set-dot"></div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="win-actions">
+              {round < 3 ? (
+                <button onClick={() => startAction(false)} className="mega-button">次のラウンドへ</button>
+              ) : (
+                <button onClick={() => setShowFinalResult(true)} className="mega-button primary">最終結果を見る</button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -367,7 +397,7 @@ function App() {
       {showFinalResult && (
         <div className="win-overlay final-bg">
           <div className="final-card">
-            <h1 className="final-title">🏆 最終結果 🏆</h1>
+            <h1 className="final-title">🏆 鍋将軍 決定 🏆</h1>
             <div className="final-rank-list">
               {currentRank.map((r, i) => (
                 <div key={i} className={`final-rank-item rank-${i+1} ${r.isMe?'me':''}`}>
