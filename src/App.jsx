@@ -82,7 +82,6 @@ function App() {
         isMe: id === myId
       })).sort((a, b) => b.score - a.score);
     }
-    // CPU戦のスコア初期値を0に完全固定
     return [
       { name: "あなた", score: totalScore, isMe: true },
       { name: "CPU 1", score: 0, isMe: false },
@@ -243,23 +242,52 @@ function App() {
     startAction(true);
   }
 
+  /* --- ここが修正された入室セクション --- */
   if (gameMode === "online" && !isJoined) return (
     <div className="game-container">
       <div className="start-screen">
         <h2 className="section-title">プレイヤー登録</h2>
         <p className="room-id-display">Room: {roomId}</p>
-        <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} className="name-input-large" placeholder="名前を入力" />
-        <button onClick={() => {
-          if (!playerName.trim()) return;
-          const pRef = push(ref(db, `rooms/${roomId}/players`));
-          setMyId(pRef.key);
-          set(pRef, { name: playerName, hand: [], score: 0 });
-          onDisconnect(pRef).remove();
-          setIsJoined(true);
-        }} className="mega-button">入室する</button>
+        <input 
+          type="text" 
+          value={playerName} 
+          onChange={(e) => setPlayerName(e.target.value)} 
+          className="name-input-large" 
+          placeholder="名前を入力" 
+        />
+        <button 
+          onClick={async () => {
+            if (!playerName.trim()) return;
+            try {
+              // 1. pushして一意のIDを取得
+              const pRef = push(ref(db, `rooms/${roomId}/players`));
+              setMyId(pRef.key);
+              
+              // 2. setで確実に書き込み、完了を待機
+              await set(pRef, { 
+                name: playerName, 
+                hand: [], 
+                score: 0 
+              });
+              
+              // 3. ブラウザを閉じた時に自動削除
+              onDisconnect(pRef).remove();
+              
+              // 4. 成功したらフラグを立てる
+              setIsJoined(true);
+            } catch (err) {
+              console.error("Firebase書き込みエラー:", err);
+              alert("入室に失敗しました。接続を確認してください。");
+            }
+          }} 
+          className="mega-button"
+        >
+          参加する
+        </button>
       </div>
     </div>
   );
+  /* --- 修正セクション終了 --- */
 
   const pIds = Object.keys(players);
   const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
