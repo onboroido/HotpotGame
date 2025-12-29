@@ -226,7 +226,7 @@ function App() {
     );
   };
 
-  // 1. モード選択画面
+  // メインメニュー
   if (!gameMode) {
     return (
       <div className="game-container full-height">
@@ -241,15 +241,21 @@ function App() {
     );
   }
 
-  // 2. 名前入力画面 (オンラインのみ)
+  // 名前入力 (オンラインのみ)
   if (gameMode === "online" && !isJoined) {
     return (
       <div className="game-container full-height">
         <div className="start-screen">
-          <h2 className="section-title">オンライン対戦</h2>
-          <input type="text" value={playerName} onChange={(e)=>setPlayerName(e.target.value)} className="name-input-large" placeholder="あなたの名前を入力" />
+          <h2 className="section-title">プレイヤー登録</h2>
+          <input 
+            type="text" 
+            value={playerName} 
+            onChange={(e) => setPlayerName(e.target.value)} 
+            className="name-input-large" 
+            placeholder="あなたの名前を入力" 
+          />
           <button onClick={() => {
-            if (!playerName) return alert("名前を入力してください");
+            if (!playerName.trim()) return alert("名前を入力してください");
             const playersRef = ref(db, `rooms/${roomId}/players`);
             const newPlayerRef = push(playersRef);
             setMyId(newPlayerRef.key);
@@ -257,7 +263,13 @@ function App() {
             onDisconnect(newPlayerRef).remove();
             setIsJoined(true);
           }} className="mega-button">入室する</button>
-          <p className="invite-info">このURLを友だちに送ってください：<br/>{window.location.href}</p>
+          <div className="invite-box">
+             <p className="invite-info">招待用URL：<br/>{window.location.href}</p>
+             <button className="copy-url-btn-inline" onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                alert("URLをコピーしました！");
+             }}>コピーする</button>
+          </div>
         </div>
       </div>
     );
@@ -269,6 +281,7 @@ function App() {
 
   return (
     <div className="game-container pc-optimized">
+      {/* 画面上部ステータス */}
       <div className="compact-score-badge">
         <div className="score-row">
           <span className="score-label">SCORE</span>
@@ -278,7 +291,7 @@ function App() {
       </div>
 
       <div className="top-bar">
-        <span>{gameMode === "online" ? `ルームID: ${roomId}` : "CPU戦"}</span>
+        <span>{gameMode === "online" ? `Room ID: ${roomId}` : "Solo Play (CPU)"}</span>
         {gameMode === "online" && (
             <button className="copy-url-btn" onClick={() => {
                 navigator.clipboard.writeText(window.location.href);
@@ -287,32 +300,37 @@ function App() {
         )}
       </div>
       
+      {/* 待機画面 / プレイ画面切り替え */}
       {gameStatus === "waiting" ? (
         <div className="start-screen centered">
           <div className="player-wait-list">
-             <h3>待機中のプレイヤー</h3>
+             <h3>参加中のプレイヤー</h3>
              {gameMode === "online" ? (
-                 Object.values(players).map((p,idx) => <div key={idx} className="wait-p-name">🍲 {p.name}</div>)
+                 Object.values(players).map((p, idx) => (
+                    <div key={idx} className="wait-p-name">🍲 {p.name} {p.name === playerName ? "(あなた)" : ""}</div>
+                 ))
              ) : (
-                 <div className="wait-p-name">🍲 あなた</div>
+                <div className="wait-p-name">🍲 あなた</div>
              )}
           </div>
           <button onClick={startAction} className="mega-button">ゲーム開始</button>
         </div>
       ) : (
         <div className="playing-field">
-          {/* 上(CPU 2 / Player 2) */}
+          {/* 上(対面) */}
           <div className="table-row">
             <div className={`player-info-box ${(turn === (mIdx + 2) % 4) ? 'active' : ''}`}>
-              <div className="p-name-tag">{gameMode === "online" ? (players[pIds[(mIdx+2)%4]]?.name || "待機中...") : "CPU 2"}</div>
+              <div className="p-name-tag">{gameMode === "online" ? (players[pIds[(mIdx+2)%4]]?.name || "Player 3") : "CPU 2"}</div>
             </div>
           </div>
 
           <div className="center-board-wrapper">
+             {/* 左(上手) */}
              <div className={`player-info-box side left-side ${(turn === (mIdx + 1) % 4) ? 'active' : ''}`}>
-               <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+1)%4]]?.name || "待機中...") : "CPU 1"}</div>
+               <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+1)%4]]?.name || "Player 2") : "CPU 1"}</div>
              </div>
 
+             {/* 中央 十字レイアウト */}
              <div className="cross-grid">
                 <div className="grid-cell empty"></div>
                 <div className="grid-cell slot top-slot" onClick={() => pickFromSlotAction((mIdx + 2) % 4)}>
@@ -337,11 +355,13 @@ function App() {
                 <div className="grid-cell empty"></div>
              </div>
 
+             {/* 右(下手) */}
              <div className={`player-info-box side right-side ${(turn === (mIdx + 3) % 4) ? 'active' : ''}`}>
-               <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "待機中...") : "CPU 3"}</div>
+               <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "Player 4") : "CPU 3"}</div>
              </div>
           </div>
 
+          {/* 下(自分) */}
           <div className="table-row bottom-player-row">
             <div className={`my-hand-area ${turn === mIdx ? 'active' : ''}`}>
                <div className="my-hand-container">
@@ -359,6 +379,7 @@ function App() {
         </div>
       )}
 
+      {/* 終了画面 */}
       {gameStatus === "finished" && (
         <div className="win-overlay-full">
           <div className="win-card">
