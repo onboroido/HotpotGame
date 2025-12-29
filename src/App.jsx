@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 import { db } from './firebase'; 
 import { ref, onValue, set, update, push, onDisconnect, serverTimestamp } from "firebase/database";
@@ -32,7 +32,7 @@ function App() {
   const [round, setRound] = useState(1);
   const [gameLog, setGameLog] = useState("準備中...");
   const [hasDrawn, setHasDrawn] = useState(false);
-  const [lastWinDetails, setLastWinDetails] = useState({ total: 0, breakdown: [] });
+  const [lastWinDetails, setLastWinDetails] = useState({ total: 0 });
   const [hand, setHand] = useState([]); 
   const [cpuHands, setCpuHands] = useState([[], [], []]);
   const [totalScore, setTotalScore] = useState(0);
@@ -41,6 +41,7 @@ function App() {
 
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
 
+  // 手札判定ロジック
   const getProcessedHand = (currentHand) => {
     if (!currentHand || currentHand.length === 0) return [];
     let p = currentHand.map(c => ({ ...c, isCompleted: false }));
@@ -79,7 +80,8 @@ function App() {
     return { total };
   };
 
-  const startAction = (resetGame = false) => {
+  // カード配布 & ラウンド開始
+  const startAction = useCallback((resetGame = false, currentMode = gameMode) => {
     const fullDeck = [];
     CARD_TYPES.forEach(type => {
       for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()});
@@ -89,12 +91,16 @@ function App() {
     const nextRound = resetGame ? 1 : round + 1;
     if (resetGame) setTotalScore(0);
 
-    if (gameMode === "cpu") {
+    if (currentMode === "cpu") {
       setRound(nextRound);
-      setHand(sortHand(fullDeck.splice(0, 8)));
+      const newHand = sortHand(fullDeck.splice(0, 8));
+      setHand(newHand);
       setCpuHands([fullDeck.splice(0, 8), fullDeck.splice(0, 8), fullDeck.splice(0, 8)]);
-      setDeck(fullDeck); setSlots([null,null,null,null]);
-      setGameStatus("playing"); setTurn(0); setHasDrawn(false); 
+      setDeck(fullDeck);
+      setSlots([null, null, null, null]);
+      setGameStatus("playing");
+      setTurn(0);
+      setHasDrawn(false);
       setGameLog(`第${nextRound}ラウンド開始！`);
     } else {
       const playerIds = Object.keys(players);
@@ -112,8 +118,56 @@ function App() {
       updates['log'] = `第${nextRound}ラウンド開始！`;
       update(ref(db, `rooms/${roomId}`), updates);
     }
+  }, [gameMode, round, players, roomId]);
+
+  // モード選択
+  const selectMode = (mode) => {
+    setGameMode(mode);
+    if (mode === "cpu") {
+      // modeを引数で渡すことで確実に配布を実行
+      startAction(true, "cpu");
+    }
   };
 
+  // CPU思考ロジック
+  useEffect(() => {
+    if (gameMode === "cpu" && gameStatus === "playing" && turn !== 0) {
+      const timer = setTimeout(() => {
+        let cpuIdx = turn - 1; 
+        let h = [...cpuHands[cpuIdx]];
+        let newDeck = [...deck];
+        let newSlots = [...slots];
+        let picked;
+        
+        // 捨て牌から拾うか山札から引くか
+        const prevIdx = (turn === 0) ? 3 : turn - 1;
+        if (newSlots[prevIdx] && Math.random() > 0.7) {
+          picked = newSlots[prevIdx];
+          newSlots[prevIdx] = null;
+        } else if (newDeck.length > 0) {
+          picked = newDeck.pop();
+        }
+
+        if (!picked) return;
+        h.push(picked);
+
+        if (checkWin(h)) {
+          setTimeout(() => finishRound(h, false, `CPU ${turn}`), 2000);
+        } else {
+          const dIdx = Math.floor(Math.random() * h.length);
+          const discarded = h.splice(dIdx, 1)[0];
+          newSlots[turn] = discarded;
+          setCpuHands(prev => { let n = [...prev]; n[cpuIdx] = h; return n; });
+          setSlots(newSlots);
+          setDeck(newDeck);
+          setTurn((turn + 1) % 4);
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [turn, gameStatus, gameMode, cpuHands, deck, slots]);
+
+  // アクション系
   const finishRound = (winningHand, isPlayerWinner, winnerName) => {
     const scoreDetails = calculateScore(winningHand, isPlayerWinner);
     if (isPlayerWinner) setTotalScore(prev => prev + scoreDetails.total);
@@ -133,39 +187,6 @@ function App() {
       update(ref(db, `rooms/${roomId}`), updates);
     }
   };
-
-  useEffect(() => {
-    if (gameMode === "cpu" && gameStatus === "playing" && turn !== 0) {
-      const timer = setTimeout(() => {
-        let currentCpuIdx = turn - 1; 
-        let h = [...cpuHands[currentCpuIdx]];
-        let newDeck = [...deck];
-        let newSlots = [...slots];
-        let picked;
-        const prevTurnIdx = (turn === 0) ? 3 : turn - 1;
-        if (newSlots[prevTurnIdx] && Math.random() > 0.8) {
-          picked = newSlots[prevTurnIdx];
-          newSlots[prevTurnIdx] = null;
-        } else if (newDeck.length > 0) {
-          picked = newDeck.pop();
-        }
-        if (!picked) return;
-        h.push(picked);
-        if (checkWin(h)) {
-          setTimeout(() => finishRound(h, false, `CPU ${turn}`), 2000);
-        } else {
-          const dIdx = Math.floor(Math.random() * h.length);
-          const discarded = h.splice(dIdx, 1)[0];
-          newSlots[turn] = discarded;
-          setCpuHands(prev => { let n = [...prev]; n[currentCpuIdx] = h; return n; });
-          setSlots(newSlots);
-          setDeck(newDeck);
-          setTurn((turn + 1) % 4);
-        }
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [turn, gameStatus, gameMode, cpuHands, deck, slots]);
 
   const drawAction = () => {
     const pIds = Object.keys(players);
@@ -218,6 +239,7 @@ function App() {
     }
   };
 
+  // オンライン同期用
   useEffect(() => {
     if (gameMode !== "online") return;
     let currentRoomId = roomId || Math.random().toString(36).substring(2, 7);
@@ -258,12 +280,12 @@ function App() {
 
   if (!gameMode) {
     return (
-      <div className="game-container full-height">
+      <div className="game-container full-height menu-bg">
         <div className="start-screen main-menu">
           <h1 className="title-large">🍲 Hotpot Game</h1>
           <div className="menu-buttons">
-            <button onClick={() => { setGameMode("cpu"); setGameStatus("playing"); setTimeout(() => startAction(true), 0); }} className="mega-button">CPUと対戦</button>
-            <button onClick={() => setGameMode("online")} className="mega-button">オンライン対戦</button>
+            <button onClick={() => selectMode("cpu")} className="mega-button">CPUと対戦</button>
+            <button onClick={() => selectMode("online")} className="mega-button">オンライン対戦</button>
           </div>
         </div>
       </div>
@@ -335,7 +357,9 @@ function App() {
               <div className="slots-grid">
                 <div className="slot top-slot" onClick={() => pickFromSlotAction((mIdx + 2) % 4)}><CardDisplay card={slots[(mIdx + 2) % 4]} /></div>
                 <div className="slot left-slot" onClick={() => pickFromSlotAction((mIdx + 1) % 4)}><CardDisplay card={slots[(mIdx + 1) % 4]} /></div>
-                <div className={`deck-pile ${(turn === mIdx && !hasDrawn) ? 'can-draw' : ''}`} onClick={drawAction}>山札</div>
+                <div className={`deck-pile ${(turn === mIdx && !hasDrawn) ? 'can-draw' : ''}`} onClick={drawAction}>
+                   <span className="deck-text">山札</span>
+                </div>
                 <div className="slot right-slot" onClick={() => pickFromSlotAction((mIdx + 3) % 4)}><CardDisplay card={slots[(mIdx + 3) % 4]} /></div>
                 <div className="slot bottom-slot" onClick={() => pickFromSlotAction(mIdx)}><CardDisplay card={slots[mIdx]} /></div>
               </div>
@@ -365,7 +389,7 @@ function App() {
             {round < 3 ? (
               <button onClick={() => startAction(false)} className="mega-button">次のラウンドへ</button>
             ) : (
-              <button onClick={() => startAction(true)} className="mega-button">もう一杯！</button>
+              <button onClick={() => startAction(true)} className="mega-button">もう一杯！（最初から）</button>
             )}
           </div>
         </div>
