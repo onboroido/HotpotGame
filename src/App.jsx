@@ -39,6 +39,51 @@ function App() {
 
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
 
+  // ゲーム開始処理（CPU戦・オンライン共通）
+  const startAction = (resetGame = false) => {
+    const fullDeck = [];
+    CARD_TYPES.forEach(type => {
+      for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()});
+    });
+    fullDeck.sort(() => Math.random() - 0.5);
+
+    const nextRound = resetGame ? 1 : round + 1;
+    if (resetGame) setTotalScore(0);
+
+    if (gameMode === "cpu" || (!gameMode && resetGame)) { // CPU戦選択時にも呼ばれるように
+      setRound(nextRound);
+      setHand(sortHand(fullDeck.splice(0, 8)));
+      setCpuHands([fullDeck.splice(0, 8), fullDeck.splice(0, 8), fullDeck.splice(0, 8)]);
+      setDeck(fullDeck); setSlots([null,null,null,null]);
+      setGameStatus("playing"); setTurn(0); setHasDrawn(false); 
+      setGameLog(`第${nextRound}ラウンド開始！`);
+    } else {
+      const playerIds = Object.keys(players);
+      const updates = {};
+      playerIds.forEach(id => { 
+        updates[`players/${id}/hand`] = sortHand(fullDeck.splice(0, 8)); 
+        if (resetGame) updates[`players/${id}/score`] = 0;
+      });
+      updates['round'] = nextRound;
+      updates['status'] = "playing";
+      updates['deck'] = fullDeck;
+      updates['slots'] = [null, null, null, null];
+      updates['turn'] = 0;
+      updates['hasDrawn'] = false;
+      updates['log'] = `第${nextRound}ラウンド開始！`;
+      update(ref(db, `rooms/${roomId}`), updates);
+    }
+  };
+
+  // モード選択時にCPU戦なら即開始
+  const selectMode = (mode) => {
+    setGameMode(mode);
+    if (mode === "cpu") {
+      // 少し遅延させないとstateの更新が間に合わない場合があるため
+      setTimeout(() => startAction(true), 0);
+    }
+  };
+
   useEffect(() => {
     if (gameMode !== "online") return;
     let currentRoomId = roomId || Math.random().toString(36).substring(2, 7);
@@ -168,41 +213,6 @@ function App() {
     }
   }, [turn, gameStatus, gameMode, cpuHands, deck, slots]);
 
-  const startAction = (resetGame = false) => {
-    const fullDeck = [];
-    CARD_TYPES.forEach(type => {
-      for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()});
-    });
-    fullDeck.sort(() => Math.random() - 0.5);
-
-    const nextRound = resetGame ? 1 : round + 1;
-    if (resetGame) setTotalScore(0);
-
-    if (gameMode === "cpu") {
-      setRound(nextRound);
-      setHand(sortHand(fullDeck.splice(0, 8)));
-      setCpuHands([fullDeck.splice(0, 8), fullDeck.splice(0, 8), fullDeck.splice(0, 8)]);
-      setDeck(fullDeck); setSlots([null,null,null,null]);
-      setGameStatus("playing"); setTurn(0); setHasDrawn(false); 
-      setGameLog(`第${nextRound}ラウンド開始！`);
-    } else {
-      const playerIds = Object.keys(players);
-      const updates = {};
-      playerIds.forEach(id => { 
-        updates[`players/${id}/hand`] = sortHand(fullDeck.splice(0, 8)); 
-        if (resetGame) updates[`players/${id}/score`] = 0;
-      });
-      updates['round'] = nextRound;
-      updates['status'] = "playing";
-      updates['deck'] = fullDeck;
-      updates['slots'] = [null, null, null, null];
-      updates['turn'] = 0;
-      updates['hasDrawn'] = false;
-      updates['log'] = `第${nextRound}ラウンド開始！`;
-      update(ref(db, `rooms/${roomId}`), updates);
-    }
-  };
-
   const drawAction = () => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
@@ -275,8 +285,8 @@ function App() {
         <div className="start-screen main-menu">
           <h1 className="title-large">🍲 Hotpot Game</h1>
           <div className="menu-buttons">
-            <button onClick={() => setGameMode("cpu")} className="mega-button">CPUと対戦</button>
-            <button onClick={() => setGameMode("online")} className="mega-button">オンライン対戦</button>
+            <button onClick={() => selectMode("cpu")} className="mega-button">CPUと対戦</button>
+            <button onClick={() => selectMode("online")} className="mega-button">オンライン対戦</button>
           </div>
         </div>
       </div>
@@ -314,13 +324,21 @@ function App() {
 
   return (
     <div className="game-container pc-optimized">
-      <div className="compact-score-badge">
-        <div className="score-row"><span className="score-label">ROUND {round}/3</span><span className="score-value">{gameMode === "online" ? (players[myId]?.score || 0) : totalScore}<small>pt</small></span></div>
-        <div className="mini-log-text">{gameLog}</div>
+      {/* 左上にROUND */}
+      <div className="round-badge-top-left">
+        <span className="badge-label">ROUND</span>
+        <span className="badge-value">{round}/3</span>
+      </div>
+
+      {/* 右上にSCORE */}
+      <div className="score-badge-top-right">
+        <span className="badge-label">SCORE</span>
+        <span className="badge-value">{gameMode === "online" ? (players[myId]?.score || 0) : totalScore}<small>pt</small></span>
       </div>
 
       <div className="top-bar">
         <span>{gameMode === "online" ? `Room: ${roomId}` : "Solo Play"}</span>
+        <div className="log-scroll-area">{gameLog}</div>
       </div>
       
       {gameStatus === "waiting" ? (

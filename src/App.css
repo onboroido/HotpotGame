@@ -1,49 +1,64 @@
-:root {
-  --bg-color: #1a252f;
-  --accent-orange: #e67e22;
-  --dark-orange: #d35400;
-  --light-orange: #f39c12;
-  --active-gold: #f1c40f;
-  --deck-brown: #5d4037;
-  --deck-brown-dark: #3e2723;
+/* 左上ラウンドバッジ */
+.round-badge-top-left {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 8px 15px;
+  border-radius: 10px;
+  border-left: 4px solid var(--active-gold);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
 }
 
-body { margin: 0; padding: 0; background-color: var(--bg-color); font-family: sans-serif; color: white; overflow: hidden; }
-.game-container { max-width: 1200px; margin: 0 auto; height: 100vh; display: flex; flex-direction: column; position: relative; }
-
-/* カード */
-.card {
-  width: 85px; height: 120px; background: white; border-radius: 8px;
-  border: 2px solid var(--card-color); position: relative; cursor: pointer;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.4); overflow: hidden;
-  box-sizing: border-box; display: flex; flex-direction: column;
+/* 右上スコアバッジ */
+.score-badge-top-right {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 8px 15px;
+  border-radius: 10px;
+  border-right: 4px solid var(--accent-orange);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  z-index: 100;
 }
-.card-inner { display: flex; flex-direction: column; align-items: center; height: 100%; padding: 4px; box-sizing: border-box; }
-.card-category-tag { font-size: 8px; color: white; padding: 1px 4px; border-radius: 3px; width: auto; margin-bottom: 4px; align-self: flex-start; white-space: nowrap; font-weight: bold; }
-.emoji-wrapper { font-size: 2.2rem; margin: 4px 0; line-height: 1; }
-.card-name { color: #333; font-weight: bold; text-align: center; width: 100%; word-break: break-all; line-height: 1.1; margin-top: auto; padding-bottom: 2px; }
 
-/* 待機画面 */
-.waiting-status-card { background: rgba(255, 255, 255, 0.1); padding: 30px; border-radius: 20px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); width: 90%; max-width: 450px; text-align: center; }
-.player-counter { margin-bottom: 20px; background: var(--accent-orange); display: inline-block; padding: 10px 20px; border-radius: 50px; box-shadow: 0 4px 15px rgba(230, 126, 34, 0.4); }
-.count-number { font-size: 1.8rem; font-weight: bold; }
-.count-label { font-size: 0.9rem; margin-left: 5px; }
-.wait-p-empty { color: rgba(255, 255, 255, 0.3); font-style: italic; margin: 5px 0; font-size: 0.9rem; }
-.invite-section { margin: 25px 0; text-align: left; background: rgba(0, 0, 0, 0.2); padding: 15px; border-radius: 12px; }
-.invite-label { font-size: 0.8rem; margin-bottom: 8px; color: var(--active-gold); }
-.invite-url-display { display: flex; gap: 5px; }
-.url-input { flex: 1; background: #333; border: 1px solid #555; color: #ccc; padding: 5px 10px; border-radius: 4px; font-size: 0.75rem; }
-.copy-btn-small { background: var(--active-gold); border: none; border-radius: 4px; padding: 0 10px; cursor: pointer; font-weight: bold; font-size: 0.8rem; }
+.badge-label {
+  font-size: 0.65rem;
+  color: #aaa;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
 
-/* レイアウト */
-.mega-button { padding: 15px 40px; font-size: 1.2rem; font-weight: bold; color: white; background: linear-gradient(to bottom, var(--light-orange), var(--accent-orange)); border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 5px 0 var(--dark-orange); margin: 10px; }
-.playing-field { flex: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 10px; }
-.center-board-wrapper { flex: 1; display: flex; align-items: center; justify-content: center; gap: 30px; }
-.cross-grid { display: grid; grid-template-columns: 85px 105px 85px; grid-template-rows: 120px 145px 120px; gap: 15px; align-items: center; justify-items: center; }
-.deck-cell { width: 105px; height: 145px; background: linear-gradient(135deg, var(--deck-brown), var(--deck-brown-dark)); border: 3px solid #eee; border-radius: 10px; cursor: pointer; }
-.player-info-box { padding: 5px 15px; border-radius: 15px; background: rgba(0,0,0,0.5); border: 2px solid transparent; }
-.player-info-box.active { border-color: var(--active-gold); box-shadow: 0 0 10px var(--active-gold); }
-.my-hand-area { width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 15px; }
-.my-hand-container { display: flex; gap: 4px; justify-content: center; align-items: flex-end; }
-.win-overlay-full { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 2000; }
-.win-card { background: white; color: #333; padding: 30px; border-radius: 20px; text-align: center; border: 5px solid var(--active-gold); }
+.badge-value {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: white;
+}
+
+.badge-value small {
+  font-size: 0.8rem;
+  margin-left: 2px;
+}
+
+/* 既存のバッジスタイルを削除または無効化 */
+.compact-score-badge { display: none; }
+
+.top-bar {
+  margin-top: 10px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+}
+
+.log-scroll-area {
+  margin-left: 20px;
+  color: var(--active-gold);
+  font-weight: bold;
+}
