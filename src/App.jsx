@@ -165,6 +165,6 @@ function App() {
   if (gameMode === "cpu" && gameStatus === "playing" && hand.length === 0) {
     startAction(true);
   }
-
+}
   // 以下、レンダリング部分は前回と同じ（ランキング表示の修正が適用されます）
   // ... (省略: 前回の return 内容をそのまま使用)
