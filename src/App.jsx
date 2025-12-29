@@ -60,18 +60,18 @@ function App() {
   const checkWin = (currentHand) => getProcessedHand(currentHand).filter(c => c.isCompleted).length >= 9;
 
   const calculateScore = (finalHand, isWinner) => {
-    let total = isWinner ? 30 : 0;
+    let total = isWinner ? 25 : 0; // 勝利ボーナス: 25点
     const processed = getProcessedHand(finalHand);
     const checkedIds = new Set();
     const idCount = {}; 
     processed.forEach(c => idCount[c.id] = (idCount[c.id] || 0) + 1);
     Object.keys(idCount).forEach(id => {
-      if (idCount[id] >= 3) { total += 25; checkedIds.add(parseInt(id)); }
+      if (idCount[id] >= 3) { total += 25; checkedIds.add(parseInt(id)); } // 同種3枚: 25点
     });
     ['野菜', '肉類', '魚介', '葉物'].forEach(cat => {
       const catCards = processed.filter(c => c.category === cat && !checkedIds.has(c.id));
       const uIds = [...new Set(catCards.map(c => c.id))];
-      if (uIds.length >= 3) total += 15;
+      if (uIds.length >= 3) total += 15; // 同カテゴリ3種: 15点
     });
     return { total };
   };
@@ -95,8 +95,8 @@ function App() {
       const cpuIds = ["me", "cpu1", "cpu2", "cpu3"];
       const roundHands = {};
       cpuIds.forEach((id, idx) => {
-        const isWinner = (idx === winnerId); // winnerIdは数値(0-3)
-        const currentH = (id === "me") ? hand : []; // CPUの手札保持は省略されているため空
+        const isWinner = (idx === (typeof winnerId === 'number' ? winnerId : 0));
+        const currentH = (id === "me") ? hand : [];
         const scoreData = calculateScore(currentH, isWinner);
         if(id === "me") setTotalScore(s => s + scoreData.total);
         roundHands[id] = { name: id === "me" ? "あなた" : `CPU ${idx}`, hand: currentH, isWinner, roundScore: scoreData.total };
