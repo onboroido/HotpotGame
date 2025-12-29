@@ -35,6 +35,7 @@ function App() {
   const [lastWinDetails, setLastWinDetails] = useState(null);
   const [hand, setHand] = useState([]); 
   const [totalScore, setTotalScore] = useState(0);
+  const [showFinalResult, setShowFinalResult] = useState(false);
 
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
@@ -45,11 +46,7 @@ function App() {
     let p = currentHand.map(c => ({ ...c, isCompleted: false }));
     const counts = {};
     p.forEach(c => { counts[c.id] = (counts[c.id] || 0) + 1; });
-    
-    // 刻み（同じカード3枚）の判定
     p = p.map(c => counts[c.id] >= 3 ? { ...c, isCompleted: true } : c);
-    
-    // セット（同じカテゴリ3種類）の判定
     ['野菜', '肉類', '魚介', '葉物'].forEach(cat => {
       const catCards = p.filter(c => c.category === cat && !c.isCompleted);
       const uniqueIds = [...new Set(catCards.map(c => c.id))];
@@ -61,22 +58,17 @@ function App() {
     return p;
   };
 
-  const checkWin = (currentHand) => {
-    const processed = getProcessedHand(currentHand);
-    return processed.filter(c => c.isCompleted).length >= 9;
-  };
+  const checkWin = (currentHand) => getProcessedHand(currentHand).filter(c => c.isCompleted).length >= 9;
 
   const calculateScore = (finalHand, isWinner) => {
-    let total = isWinner ? 40 : 0; // 上がりボーナス
+    let total = isWinner ? 40 : 0;
     const processed = getProcessedHand(finalHand);
     const checkedIds = new Set();
     const idCount = {}; 
     processed.forEach(c => idCount[c.id] = (idCount[c.id] || 0) + 1);
-    
     Object.keys(idCount).forEach(id => {
       if (idCount[id] >= 3) { total += 30; checkedIds.add(parseInt(id)); }
     });
-    
     ['野菜', '肉類', '魚介', '葉物'].forEach(cat => {
       const catCards = processed.filter(c => c.category === cat && !checkedIds.has(c.id));
       const uIds = [...new Set(catCards.map(c => c.id))];
@@ -85,33 +77,23 @@ function App() {
     return { total };
   };
 
-  // 全員のスコアを計算して適用する関数
   const finalizeGameScores = (winnerId = null) => {
     const pIds = Object.keys(players);
     const updates = {};
-    let myRoundScore = 0;
-
     pIds.forEach(id => {
       const isWinner = (id === winnerId);
-      const playerHand = players[id].hand || [];
-      const scoreData = calculateScore(playerHand, isWinner);
-      
+      const scoreData = calculateScore(players[id].hand || [], isWinner);
       updates[`players/${id}/score`] = (players[id].score || 0) + scoreData.total;
-      if (id === myId) myRoundScore = scoreData.total;
     });
-
     updates.status = "finished";
-    // 便宜上、最後に上がった人のスコア詳細をリザルト画面のメインに表示
-    const winHand = winnerId ? players[winnerId].hand : [];
+    const winHand = winnerId ? (players[winnerId].hand || []) : [];
     updates.lastWinDetails = calculateScore(winHand, true); 
-    
     update(ref(db, `rooms/${roomId}`), updates);
   };
 
-  // --- CPU思考ロジック ---
+  // --- CPU思考 ---
   useEffect(() => {
     if (gameStatus !== "playing") return;
-
     const runCpuTurn = async () => {
       if (gameMode === "cpu" && turn !== 0) {
         setGameLog(`CPU ${turn} が考え中...`);
@@ -131,13 +113,10 @@ function App() {
           setTurn((turn + 1) % 4);
         }
       }
-
       if (gameMode === "online") {
         const pIds = Object.keys(players);
         const currentPlayerId = pIds[turn];
-        const isHost = myId === pIds[0];
-        if (!isHost || !players[currentPlayerId]?.isCpu) return;
-
+        if (!myId || myId !== pIds[0] || !players[currentPlayerId]?.isCpu) return;
         const roomRef = ref(db, `rooms/${roomId}`);
         if (!hasDrawn) {
           await new Promise(r => setTimeout(r, 1200));
@@ -145,57 +124,42 @@ function App() {
           if (newDeck.length === 0) return;
           const picked = newDeck.pop();
           const cpuHand = sortHand([...(players[currentPlayerId].hand || []), picked]);
-          
           if (checkWin(cpuHand)) {
-            // CPUが上がった場合、ホストが全員のスコアを計算
-            const roundUpdates = { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand };
-            update(roomRef, roundUpdates).then(() => {
-              finalizeGameScores(currentPlayerId);
-            });
+            update(roomRef, { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand }).then(() => finalizeGameScores(currentPlayerId));
             return;
           }
-          
           update(roomRef, { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand, hasDrawn: true });
         } else {
           await new Promise(r => setTimeout(r, 1200));
           const cpuHand = [...(players[currentPlayerId].hand || [])];
-          const discardIdx = Math.floor(Math.random() * cpuHand.length);
-          const discarded = cpuHand.splice(discardIdx, 1)[0];
-          update(roomRef, {
-            [`players/${currentPlayerId}/hand`]: sortHand(cpuHand),
-            [`slots/${turn}`]: discarded,
-            turn: (turn + 1) % 4,
-            hasDrawn: false
-          });
+          const discarded = cpuHand.splice(Math.floor(Math.random() * cpuHand.length), 1)[0];
+          update(roomRef, { [`players/${currentPlayerId}/hand`]: sortHand(cpuHand), [`slots/${turn}`]: discarded, turn: (turn + 1) % 4, hasDrawn: false });
         }
       }
     };
     runCpuTurn();
-  }, [turn, hasDrawn, gameStatus, gameMode, deck, players, roomId, myId, slots]);
+  }, [turn, hasDrawn, gameStatus, gameMode, deck, players, roomId, myId]);
 
   // --- ゲーム管理 ---
   const startAction = useCallback(async (resetGame = false) => {
+    if (resetGame) setShowFinalResult(false);
     const fullDeck = [];
     CARD_TYPES.forEach(type => { for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()}); });
     fullDeck.sort(() => Math.random() - 0.5);
     const nextRound = resetGame ? 1 : round + 1;
 
     if (gameMode === "online") {
-      const roomRef = ref(db, `rooms/${roomId}`);
       const updates = {};
-      const currentPIds = Object.keys(players);
+      const pIds = Object.keys(players);
       const finalPlayers = { ...players };
-      for (let i = currentPIds.length; i < 4; i++) {
+      for (let i = pIds.length; i < 4; i++) {
         const cpuId = `cpu_${i}`;
-        if (!finalPlayers[cpuId]) {
-          finalPlayers[cpuId] = { name: `CPU ${i}`, hand: [], score: 0, isCpu: true };
-        }
+        if (!finalPlayers[cpuId]) finalPlayers[cpuId] = { name: `CPU ${i}`, hand: [], score: 0, isCpu: true };
       }
       Object.keys(finalPlayers).forEach(id => {
         updates[`players/${id}/hand`] = sortHand(fullDeck.splice(0, 8));
         if (resetGame) updates[`players/${id}/score`] = 0;
         updates[`players/${id}/isCpu`] = !!finalPlayers[id].isCpu;
-        updates[`players/${id}/name`] = finalPlayers[id].name;
       });
       updates.round = nextRound;
       updates.status = "playing";
@@ -203,9 +167,8 @@ function App() {
       updates.slots = [null, null, null, null];
       updates.turn = 0;
       updates.hasDrawn = false;
-      updates.log = `第${nextRound}ラウンド開始！`;
       updates.lastWinDetails = null;
-      await update(roomRef, updates);
+      await update(ref(db, `rooms/${roomId}`), updates);
     } else {
       if (resetGame) setTotalScore(0);
       setRound(nextRound);
@@ -215,78 +178,57 @@ function App() {
       setGameStatus("playing");
       setTurn(0);
       setHasDrawn(false);
-      setGameLog(`第${nextRound}ラウンド開始！`);
       setLastWinDetails(null);
     }
   }, [gameMode, round, players, roomId]);
 
   useEffect(() => {
     if (gameMode !== "online" || !roomId) return;
-    const roomRef = ref(db, `rooms/${roomId}`);
-    return onValue(roomRef, (snapshot) => {
-      const data = snapshot.val();
-      if (!data) return;
-      setPlayers(data.players || {});
-      setGameStatus(data.status || "waiting");
-      setDeck(data.deck || []);
-      setSlots(data.slots || [null, null, null, null]);
-      setTurn(data.turn || 0);
-      setRound(data.round || 1);
-      setGameLog(data.log || "");
-      setHasDrawn(data.hasDrawn || false);
-      if (data.lastWinDetails) setLastWinDetails(data.lastWinDetails);
+    return onValue(ref(db, `rooms/${roomId}`), (s) => {
+      const d = s.val();
+      if (!d) return;
+      setPlayers(d.players || {});
+      setGameStatus(d.status || "waiting");
+      setDeck(d.deck || []);
+      setSlots(d.slots || [null, null, null, null]);
+      setTurn(d.turn || 0);
+      setRound(d.round || 1);
+      setHasDrawn(d.hasDrawn || false);
+      if (d.lastWinDetails) setLastWinDetails(d.lastWinDetails);
     });
   }, [gameMode, roomId]);
 
-  // --- プレイヤーアクション ---
+  // --- アクション ---
   const drawAction = () => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
     if (turn !== mIdx || hasDrawn || gameStatus !== "playing") return;
-
     const newDeck = [...deck];
     const picked = newDeck.pop();
     const curH = gameMode === "online" ? players[myId].hand : hand;
     const newHand = sortHand([...(curH || []), picked]);
-
     if (checkWin(newHand)) {
       if (gameMode === "online") {
-        update(ref(db, `rooms/${roomId}`), { [`players/${myId}/hand`]: newHand }).then(() => {
-          finalizeGameScores(myId);
-        });
+        update(ref(db, `rooms/${roomId}`), { [`players/${myId}/hand`]: newHand }).then(() => finalizeGameScores(myId));
       } else {
-        setHand(newHand);
-        const sd = calculateScore(newHand, true);
-        setTotalScore(s => s + sd.total);
-        setGameStatus("finished");
-        setLastWinDetails(sd);
+        setHand(newHand); setTotalScore(s => s + calculateScore(newHand, true).total);
+        setGameStatus("finished"); setLastWinDetails(calculateScore(newHand, true));
       }
       return;
     }
-
-    if (gameMode === "online") {
-      update(ref(db, `rooms/${roomId}`), { deck: newDeck, [`players/${myId}/hand`]: newHand, hasDrawn: true });
-    } else {
-      setHand(newHand); setDeck(newDeck); setHasDrawn(true);
-    }
+    if (gameMode === "online") update(ref(db, `rooms/${roomId}`), { deck: newDeck, [`players/${myId}/hand`]: newHand, hasDrawn: true });
+    else { setHand(newHand); setDeck(newDeck); setHasDrawn(true); }
   };
 
   const discardAction = (idx) => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
     if (turn !== mIdx || !hasDrawn) return;
-
     const curH = gameMode === "online" ? (players[myId]?.hand || []) : hand;
     const newHand = [...curH];
     const discarded = newHand.splice(idx, 1)[0];
-
     if (gameMode === "online") {
-      update(ref(db, `rooms/${roomId}`), {
-        [`players/${myId}/hand`]: sortHand(newHand),
-        [`slots/${mIdx}`]: discarded,
-        turn: (turn + 1) % 4,
-        hasDrawn: false
-      });
+      update(ref(db, `rooms/${roomId}`), { [`players/${myId}/hand`]: sortHand(newHand), [`slots/${mIdx}`]: discarded, turn: (turn + 1) % 4, hasDrawn: false });
     } else {
       const ns = [...slots]; ns[0] = discarded;
       setHand(sortHand(newHand)); setSlots(ns); setHasDrawn(false); setTurn(1);
@@ -297,33 +239,21 @@ function App() {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
     if (turn !== mIdx || hasDrawn || !slots[idx]) return;
-
     const picked = slots[idx];
     const ns = [...slots]; ns[idx] = null;
     const curH = gameMode === "online" ? (players[myId]?.hand || []) : hand;
     const newHand = sortHand([...curH, picked]);
-
     if (checkWin(newHand)) {
       if (gameMode === "online") {
-        update(ref(db, `rooms/${roomId}`), { 
-          slots: ns,
-          [`players/${myId}/hand`]: newHand 
-        }).then(() => {
-          finalizeGameScores(myId);
-        });
+        update(ref(db, `rooms/${roomId}`), { slots: ns, [`players/${myId}/hand`]: newHand }).then(() => finalizeGameScores(myId));
       } else {
-        setHand(newHand); setSlots(ns); 
-        const sd = calculateScore(newHand, true);
-        setTotalScore(s => s + sd.total); setGameStatus("finished"); setLastWinDetails(sd);
+        setHand(newHand); setSlots(ns); setTotalScore(s => s + calculateScore(newHand, true).total);
+        setGameStatus("finished"); setLastWinDetails(calculateScore(newHand, true));
       }
       return;
     }
-
-    if (gameMode === "online") {
-      update(ref(db, `rooms/${roomId}`), { slots: ns, [`players/${myId}/hand`]: newHand, hasDrawn: true });
-    } else {
-      setHand(newHand); setSlots(ns); setHasDrawn(true);
-    }
+    if (gameMode === "online") update(ref(db, `rooms/${roomId}`), { slots: ns, [`players/${myId}/hand`]: newHand, hasDrawn: true });
+    else { setHand(newHand); setSlots(ns); setHasDrawn(true); }
   };
 
   const CardDisplay = ({ card, onClick, className }) => (
@@ -346,11 +276,8 @@ function App() {
         <div className="menu-buttons">
           <button onClick={() => { setGameMode("cpu"); setGameStatus("playing"); }} className="mega-button">一人で練習 (CPU戦)</button>
           <button onClick={() => {
-            const currentRoom = new URLSearchParams(window.location.search).get('room');
-            const targetRoom = currentRoom || Math.random().toString(36).substring(2,7);
-            setRoomId(targetRoom);
-            setGameMode("online");
-            if(!currentRoom) window.history.pushState({}, '', `?room=${targetRoom}`);
+            const r = new URLSearchParams(window.location.search).get('room') || Math.random().toString(36).substring(2,7);
+            setRoomId(r); setGameMode("online"); if(!window.location.search) window.history.pushState({}, '', `?room=${r}`);
           }} className="mega-button">オンライン対戦</button>
         </div>
       </div>
@@ -361,17 +288,12 @@ function App() {
     <div className="game-container">
       <div className="start-screen">
         <h2 className="section-title">プレイヤー登録</h2>
-        <p className="room-id-display">Room: {roomId}</p>
         <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} className="name-input-large" placeholder="名前を入力" />
         <button onClick={async () => {
           if (!playerName.trim()) return;
-          try {
-            const pRef = push(ref(db, `rooms/${roomId}/players`));
-            setMyId(pRef.key);
-            await set(pRef, { name: playerName, hand: [], score: 0 });
-            onDisconnect(pRef).remove();
-            setIsJoined(true);
-          } catch(e) { alert("入室失敗"); }
+          const pRef = push(ref(db, `rooms/${roomId}/players`));
+          setMyId(pRef.key); await set(pRef, { name: playerName, hand: [], score: 0 });
+          onDisconnect(pRef).remove(); setIsJoined(true);
         }} className="mega-button">参加する</button>
       </div>
     </div>
@@ -382,25 +304,18 @@ function App() {
   const pIds = Object.keys(players);
   const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
   const curHand = gameMode === "online" ? (players[myId]?.hand || []) : hand;
-  const currentRank = Object.keys(players).map(id => ({ name: players[id].name, score: players[id].score || 0, isMe: id === myId })).sort((a,b)=>b.score-a.score);
-  
-  // 自分が今ラウンドで得たスコアを表示用
+  const currentRank = (gameMode === "online" ? pIds.map(id => ({ ...players[id], isMe: id === myId })) : [{ name: "あなた", score: totalScore, isMe: true }, { name: "CPU 1", score: 0 }, { name: "CPU 2", score: 0 }, { name: "CPU 3", score: 0 }]).sort((a,b)=>b.score-a.score);
   const myRoundScore = calculateScore(curHand, checkWin(curHand)).total;
 
   return (
     <div className="game-container">
-      <div className="round-badge">{round}/3</div>
+      <div className="round-badge">Round {round}/3</div>
       {gameMode === "online" && gameStatus === "waiting" ? (
         <div className="start-screen centered">
           <div className="waiting-card">
             <h2>待機中 ({pIds.length}/4)</h2>
             <div className="p-list">{pIds.map(id => <div key={id} className="p-list-item">{players[id].name}</div>)}</div>
-            <div className="invite-box">
-              <p>招待URL</p>
-              <input type="text" readOnly value={getInviteUrl()} className="url-input" />
-              <button onClick={() => {navigator.clipboard.writeText(getInviteUrl()); alert("コピーしました！")}}>コピー</button>
-            </div>
-            <button onClick={() => startAction(true)} className="mega-button">ゲーム開始 (CPU補充)</button>
+            <button onClick={() => startAction(true)} className="mega-button">ゲーム開始</button>
           </div>
         </div>
       ) : (
@@ -421,7 +336,6 @@ function App() {
               <div className="side-container right"><div className={`p-box ${(turn === (mIdx+3)%4) ? 'active' : ''}`}>{gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "CPU 3") : "CPU 3"}</div></div>
             </div>
             <div className="row bottom">
-              <div className="log">{gameLog}</div>
               <div className={`hand ${turn === mIdx ? 'my-turn' : ''}`}>
                 {getProcessedHand(curHand).map((c, i) => <CardDisplay key={i} card={c} className={hasDrawn && turn===mIdx ? 'active' : ''} onClick={()=>discardAction(i)}/>)}
               </div>
@@ -430,26 +344,41 @@ function App() {
           <div className="rank-panel">
             <div className="rank-title">RANKING</div>
             <div className="rank-list">
-              {(gameMode === "online" ? currentRank : [
-                { name: "あなた", score: totalScore, isMe: true },
-                { name: "CPU 1", score: 0 }, { name: "CPU 2", score: 0 }, { name: "CPU 3", score: 0 }
-              ].sort((a,b)=>b.score-a.score)).map((r, i) => (
-                <div key={i} className={`rank-item ${r.isMe?'me':''}`}><span>{i+1}. {r.name}</span><span>{r.score}pt</span></div>
-              ))}
+              {currentRank.map((r, i) => <div key={i} className={`rank-item ${r.isMe?'me':''}`}><span>{i+1}. {r.name}</span><span>{r.score}pt</span></div>)}
             </div>
           </div>
         </div>
       )}
-      {gameStatus === "finished" && (
+
+      {gameStatus === "finished" && !showFinalResult && (
         <div className="win-overlay">
           <div className="win-card">
             <h2 className="win-title">{checkWin(curHand) ? "いただきます！" : "ごちそうさま！"}</h2>
-            <p className="round-score-label">このラウンドの獲得スコア</p>
-            <div className="win-score-display">
-              <span className="win-score-val">+{myRoundScore}</span>
-              <span className="win-score-unit">pt</span>
+            <p className="round-score-label">Round {round} Score</p>
+            <div className="win-score-display"><span className="win-score-val">+{myRoundScore}</span><span className="win-score-unit">pt</span></div>
+            {round < 3 ? (
+              <button onClick={() => startAction(false)} className="mega-button">次のラウンドへ</button>
+            ) : (
+              <button onClick={() => setShowFinalResult(true)} className="mega-button primary">最終結果を見る</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showFinalResult && (
+        <div className="win-overlay final-bg">
+          <div className="final-card">
+            <h1 className="final-title">🏆 鍋将軍 決定 🏆</h1>
+            <div className="final-rank-list">
+              {currentRank.map((r, i) => (
+                <div key={i} className={`final-rank-item rank-${i+1} ${r.isMe?'me':''}`}>
+                  <div className="rank-num">{i+1}</div>
+                  <div className="rank-name">{r.name}</div>
+                  <div className="rank-score">{r.score} pt</div>
+                </div>
+              ))}
             </div>
-            <button onClick={() => startAction(false)} className="mega-button">次のラウンドへ</button>
+            <button onClick={() => { setGameMode(null); setGameStatus("waiting"); }} className="mega-button">タイトルへ戻る</button>
           </div>
         </div>
       )}
