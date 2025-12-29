@@ -15,7 +15,6 @@ body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; o
 .game-container { width: 100vw; height: 100vh; display: flex; flex-direction: column; position: relative; }
 .round-badge { position: absolute; top: 10px; left: 10px; background: #000; padding: 5px 10px; border-radius: 5px; z-index: 100; font-weight: bold; }
 
-/* メインレイアウト */
 .playing-wrapper { display: flex; flex: 1; height: 100%; overflow: hidden; }
 .main-area { flex: 1; display: flex; flex-direction: column; padding: 40px 10px 10px; min-width: 0; }
 
@@ -35,7 +34,6 @@ body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; o
 .p-box { background: rgba(255,255,255,0.1); padding: 5px 10px; border-radius: 10px; font-size: 12px; border: 2px solid transparent; }
 .p-box.active { border-color: var(--gold); background: rgba(241, 196, 15, 0.2); }
 
-/* ボード */
 .board-center { display: flex; justify-content: center; align-items: center; }
 .slots-grid { display: grid; grid-template-areas: ". t ." "l d r" ". b ."; gap: 10px; transform: scale(0.9); }
 .slot.t { grid-area: t; } .slot.l { grid-area: l; } .slot.r { grid-area: r; } .slot.b { grid-area: b; }
@@ -43,14 +41,12 @@ body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; o
 .deck.can-draw { border-color: var(--gold); box-shadow: 0 0 10px var(--gold); }
 .slot { width: var(--card-w); height: var(--card-h); border: 1px dashed #555; border-radius: 5px; }
 
-/* ランキング */
 .rank-panel { width: 160px; background: rgba(0,0,0,0.3); border-left: 1px solid #333; padding: 15px 10px; }
 .rank-title { font-size: 12px; color: var(--gold); text-align: center; margin-bottom: 10px; font-weight: bold; }
 .rank-list { display: flex; flex-direction: column; gap: 5px; }
 .rank-item { font-size: 11px; padding: 6px; background: rgba(255,255,255,0.05); border-radius: 4px; display: flex; justify-content: space-between; }
 .rank-item.me { border: 1px solid var(--gold); color: var(--gold); background: rgba(241, 196, 15, 0.1); }
 
-/* カード & 手札 */
 .hand { display: flex; gap: 4px; overflow-x: auto; padding: 10px; max-width: 100%; border: 2px solid transparent; border-radius: 10px; }
 .hand.my-turn { border-color: rgba(241, 196, 15, 0.3); }
 .card { width: var(--card-w); height: var(--card-h); background: #fff; border-radius: 5px; border: 2px solid var(--card-color); flex-shrink: 0; cursor: pointer; }
@@ -59,33 +55,11 @@ body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; o
 .card-name { font-size: 10px; margin-top: auto; font-weight: bold; }
 .card-category-tag { font-size: 8px; color: #fff; padding: 2px; border-radius: 2px; width: 100%; text-align: center; }
 
-/* 招待URL用 */
+.room-id-display { font-size: 14px; color: var(--gold); margin-bottom: 10px; }
 .invite-box { margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; font-size: 12px; }
 .url-input { width: 100%; padding: 5px; margin: 5px 0; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; }
 
 .log { color: var(--gold); font-size: 14px; margin-bottom: 8px; height: 20px; font-weight: bold; }
-.mega-button { padding: 12px 24px; background: #e67e22; border: none; border-radius: 25px; color: #fff; font-weight: bold; cursor: pointer; transition: 0.2s; }
-.mega-button:active { transform: scale(0.95); background: #d35400; }
+.mega-button { padding: 12px 24px; background: #e67e22; border: none; border-radius: 25px; color: #fff; font-weight: bold; cursor: pointer; }
 .win-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .win-card { background: #fff; color: #333; padding: 40px; border-radius: 25px; text-align: center; border: 5px solid var(--gold); }
-.score { font-size: 32px; font-weight: bold; margin: 15px 0; color: #e67e22; }
-/* 既存のApp.cssに追加/上書き */
-.room-info-text {
-  font-size: 14px;
-  color: var(--gold);
-  margin-bottom: 15px;
-  background: rgba(0,0,0,0.3);
-  padding: 5px 15px;
-  border-radius: 20px;
-}
-
-.p-list-item {
-  padding: 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  font-weight: bold;
-}
-
-.invite-box p {
-  margin: 0 0 5px 0;
-  color: #aaa;
-}
