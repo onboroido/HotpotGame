@@ -125,9 +125,12 @@ function App() {
         if (!picked) return;
         h.push(picked);
         if (checkWin(h)) {
-          setGameStatus("finished");
-          setLastWinDetails(calculateScore(h, false));
-          setGameLog(`CPU ${turn}の上がり！`);
+          // インターバルを挟んで終了
+          setTimeout(() => {
+            setGameStatus("finished");
+            setLastWinDetails(calculateScore(h, false));
+            setGameLog(`CPU ${turn}の「いただきます！」`);
+          }, 2000);
         } else {
           const dIdx = Math.floor(Math.random() * h.length);
           const discarded = h.splice(dIdx, 1)[0];
@@ -149,32 +152,21 @@ function App() {
       for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()});
     });
     fullDeck.sort(() => Math.random() - 0.5);
-
     if (gameMode === "cpu") {
       setHand(sortHand(fullDeck.splice(0, 8)));
       setCpuHands([fullDeck.splice(0, 8), fullDeck.splice(0, 8), fullDeck.splice(0, 8)]);
-      setDeck(fullDeck); 
-      setSlots([null,null,null,null]);
-      setGameStatus("playing"); 
-      setTurn(0); 
-      setHasDrawn(false); 
-      setGameLog("あなたの番です");
+      setDeck(fullDeck); setSlots([null,null,null,null]);
+      setGameStatus("playing"); setTurn(0); setHasDrawn(false); setGameLog("あなたの番です");
     } else {
-      // オンライン対戦時：各プレイヤーにカードを配る
       const playerIds = Object.keys(players);
       const updates = {};
-      
-      playerIds.forEach(id => {
-        updates[`players/${id}/hand`] = sortHand(fullDeck.splice(0, 8));
-      });
-
+      playerIds.forEach(id => { updates[`players/${id}/hand`] = sortHand(fullDeck.splice(0, 8)); });
       updates['status'] = "playing";
       updates['deck'] = fullDeck;
       updates['slots'] = [null, null, null, null];
       updates['turn'] = 0;
       updates['hasDrawn'] = false;
       updates['log'] = "ゲーム開始！";
-
       update(ref(db, `rooms/${roomId}`), updates);
     }
   };
@@ -190,10 +182,20 @@ function App() {
     const newHand = sortHand([...(curH || []), picked]);
     if (gameMode === "cpu") {
       setHand(newHand); setDeck(newDeck); setHasDrawn(true);
-      if (checkWin(newHand)) { setGameStatus("finished"); setLastWinDetails(calculateScore(newHand, true)); setGameLog("ツモ上がり！"); }
+      if (checkWin(newHand)) {
+        setTimeout(() => {
+          setGameStatus("finished"); 
+          setLastWinDetails(calculateScore(newHand, true)); 
+          setGameLog("いただきます！");
+        }, 2000);
+      }
     } else {
       update(ref(db, `rooms/${roomId}`), { deck: newDeck, [`players/${myId}/hand`]: newHand, hasDrawn: true });
-      if (checkWin(newHand)) { update(ref(db, `rooms/${roomId}`), { status: "finished", lastWinDetails: calculateScore(newHand, true), log: `${playerName}のツモ！` }); }
+      if (checkWin(newHand)) {
+        setTimeout(() => {
+          update(ref(db, `rooms/${roomId}`), { status: "finished", lastWinDetails: calculateScore(newHand, true), log: `${playerName}の「いただきます！」` });
+        }, 2000);
+      }
     }
   };
 
@@ -223,10 +225,20 @@ function App() {
     const newHand = sortHand([...(curH || []), picked]);
     if (gameMode === "cpu") {
       setHand(newHand); setSlots(newSlots); setHasDrawn(true);
-      if (checkWin(newHand)) { setGameStatus("finished"); setLastWinDetails(calculateScore(newHand, true)); setGameLog("ロン上がり！"); }
+      if (checkWin(newHand)) {
+        setTimeout(() => {
+          setGameStatus("finished"); 
+          setLastWinDetails(calculateScore(newHand, true)); 
+          setGameLog("いただきます！");
+        }, 2000);
+      }
     } else {
       update(ref(db, `rooms/${roomId}`), { slots: newSlots, [`players/${myId}/hand`]: newHand, hasDrawn: true });
-      if (checkWin(newHand)) { update(ref(db, `rooms/${roomId}`), { status: "finished", lastWinDetails: calculateScore(newHand, true), log: `${playerName}のロン！` }); }
+      if (checkWin(newHand)) {
+        setTimeout(() => {
+          update(ref(db, `rooms/${roomId}`), { status: "finished", lastWinDetails: calculateScore(newHand, true), log: `${playerName}の「いただきます！」` });
+        }, 2000);
+      }
     }
   };
 
@@ -244,6 +256,8 @@ function App() {
       </div>
     );
   };
+
+  // --- 表示分岐 (一部省略、メインのみ) ---
 
   if (!gameMode) {
     return (
@@ -306,6 +320,7 @@ function App() {
         </div>
       ) : (
         <div className="playing-field">
+          {/* 相手プレイヤーの表示エリア */}
           <div className="table-row">
             <div className={`player-info-box ${(turn === (mIdx + 2) % 4) ? 'active' : ''}`}>
               <div className="p-name-tag">{gameMode === "online" ? (players[pIds[(mIdx+2)%4]]?.name || "Player 3") : "CPU 2"}</div>
@@ -349,9 +364,9 @@ function App() {
       {gameStatus === "finished" && (
         <div className="win-overlay-full">
           <div className="win-card">
-            <h2 className="win-title">AGARI!</h2>
+            <h2 className="win-title">いただきます！</h2>
             <div className="total-score-big">{lastWinDetails.total} <small>pt</small></div>
-            <button onClick={startAction} className="mega-button">NEXT GAME</button>
+            <button onClick={startAction} className="mega-button">もう一杯！</button>
           </div>
         </div>
       )}
