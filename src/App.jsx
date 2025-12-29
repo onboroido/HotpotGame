@@ -80,21 +80,24 @@ function App() {
     if (gameStatus !== "playing") return;
 
     const runCpuTurn = async () => {
-      // 1. CPUモードの一人プレイの場合
+      // 1. CPUモード（一人練習）の場合
       if (gameMode === "cpu" && turn !== 0) {
         setGameLog(`CPU ${turn} が考え中...`);
+        
         if (!hasDrawn) {
           await new Promise(r => setTimeout(r, 1000));
           const newDeck = [...deck];
           const picked = newDeck.pop();
-          // CPUは内部的な手札管理がないため、疑似的に引いて即捨てる処理を行う
           setDeck(newDeck);
           setHasDrawn(true);
         } else {
           await new Promise(r => setTimeout(r, 1000));
           const ns = [...slots];
-          // 山札から引いたものをそのまま場に捨てる（簡易CPU）
-          // 本来は手札を持たせるべきだが、既存構造を維持するため場に反映
+          // 山札から引いた最新のカードを場に捨てる
+          const cpuDiscard = deck[deck.length - 1] || CARD_TYPES[0]; 
+          ns[turn] = cpuDiscard; 
+          
+          setSlots(ns);
           setHasDrawn(false);
           setTurn((turn + 1) % 4);
         }
@@ -116,7 +119,11 @@ function App() {
           const cpuHand = sortHand([...(players[currentPlayerId].hand || []), picked]);
           const win = checkWin(cpuHand);
           
-          const updates = { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand, hasDrawn: true };
+          const updates = { 
+            deck: newDeck, 
+            [`players/${currentPlayerId}/hand`]: cpuHand, 
+            hasDrawn: true 
+          };
           if (win) {
             updates.status = "finished";
             updates.log = `${players[currentPlayerId].name}の勝利！`;
@@ -128,6 +135,7 @@ function App() {
           const cpuHand = [...(players[currentPlayerId].hand || [])];
           const discardIdx = Math.floor(Math.random() * cpuHand.length);
           const discarded = cpuHand.splice(discardIdx, 1)[0];
+          
           update(roomRef, {
             [`players/${currentPlayerId}/hand`]: sortHand(cpuHand),
             [`slots/${turn}`]: discarded,
@@ -139,7 +147,7 @@ function App() {
     };
 
     runCpuTurn();
-  }, [turn, hasDrawn, gameStatus, gameMode]);
+  }, [turn, hasDrawn, gameStatus, gameMode, deck, players, roomId, myId, slots]);
 
   // --- ゲーム管理 ---
   const startAction = useCallback(async (resetGame = false) => {
