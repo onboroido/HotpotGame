@@ -130,7 +130,6 @@ body {
   100% { transform: scale(1); }
 }
 
-/* カードスタイル */
 .card {
   width: var(--card-width);
   height: var(--card-height);
@@ -169,7 +168,6 @@ body {
 .card-icon { font-size: 32px; margin: 10px 0; }
 .card-name { font-size: 12px; font-weight: bold; text-align: center; }
 
-/* 揃ったときのバッジ */
 .set-badge {
   position: absolute;
   top: -5px;
@@ -185,7 +183,6 @@ body {
   box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
-/* 手札 */
 .hand {
   display: flex;
   gap: 8px;
@@ -198,7 +195,6 @@ body {
 
 .hand.my-turn { border-color: var(--accent-gold); }
 
-/* ランキングパネル */
 .rank-panel {
   width: 250px;
   background: rgba(0,0,0,0.4);
@@ -224,7 +220,6 @@ body {
 
 .rank-item.me { color: var(--accent-gold); font-weight: bold; }
 
-/* ログ */
 .log {
   background: rgba(0, 0, 0, 0.6);
   color: var(--accent-gold);
@@ -235,7 +230,6 @@ body {
   font-size: 18px;
 }
 
-/* 勝利オーバーレイ */
 .win-overlay {
   position: fixed;
   inset: 0;
@@ -249,7 +243,7 @@ body {
 .win-card {
   background: white;
   color: #333;
-  padding: 50px;
+  padding: 40px 60px;
   border-radius: 30px;
   text-align: center;
   box-shadow: 0 0 50px rgba(241, 196, 15, 0.5);
@@ -258,9 +252,14 @@ body {
 
 .win-title {
   font-size: 48px;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   color: #e67e22;
-  font-family: "Sawarabi Mincho", serif;
+}
+
+.round-score-label {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 5px;
 }
 
 .win-score-display {

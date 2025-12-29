@@ -32,7 +32,7 @@ function App() {
   const [round, setRound] = useState(1);
   const [gameLog, setGameLog] = useState("準備中...");
   const [hasDrawn, setHasDrawn] = useState(false);
-  const [lastWinDetails, setLastWinDetails] = useState({ total: 0 });
+  const [lastWinDetails, setLastWinDetails] = useState(null);
   const [hand, setHand] = useState([]); 
   const [totalScore, setTotalScore] = useState(0);
 
@@ -63,12 +63,11 @@ function App() {
 
   const checkWin = (currentHand) => {
     const processed = getProcessedHand(currentHand);
-    const completedCount = processed.filter(c => c.isCompleted).length;
-    return completedCount >= 9;
+    return processed.filter(c => c.isCompleted).length >= 9;
   };
 
   const calculateScore = (finalHand, isWinner) => {
-    let total = isWinner ? 40 : 0;
+    let total = isWinner ? 40 : 0; // 上がりボーナス
     const processed = getProcessedHand(finalHand);
     const checkedIds = new Set();
     const idCount = {}; 
@@ -84,6 +83,29 @@ function App() {
       if (uIds.length >= 3) total += 15;
     });
     return { total };
+  };
+
+  // 全員のスコアを計算して適用する関数
+  const finalizeGameScores = (winnerId = null) => {
+    const pIds = Object.keys(players);
+    const updates = {};
+    let myRoundScore = 0;
+
+    pIds.forEach(id => {
+      const isWinner = (id === winnerId);
+      const playerHand = players[id].hand || [];
+      const scoreData = calculateScore(playerHand, isWinner);
+      
+      updates[`players/${id}/score`] = (players[id].score || 0) + scoreData.total;
+      if (id === myId) myRoundScore = scoreData.total;
+    });
+
+    updates.status = "finished";
+    // 便宜上、最後に上がった人のスコア詳細をリザルト画面のメインに表示
+    const winHand = winnerId ? players[winnerId].hand : [];
+    updates.lastWinDetails = calculateScore(winHand, true); 
+    
+    update(ref(db, `rooms/${roomId}`), updates);
   };
 
   // --- CPU思考ロジック ---
@@ -123,15 +145,17 @@ function App() {
           if (newDeck.length === 0) return;
           const picked = newDeck.pop();
           const cpuHand = sortHand([...(players[currentPlayerId].hand || []), picked]);
-          const win = checkWin(cpuHand);
           
-          const updates = { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand, hasDrawn: true };
-          if (win) {
-            updates.status = "finished";
-            updates.log = `${players[currentPlayerId].name}の勝利！`;
-            updates.lastWinDetails = calculateScore(cpuHand, true);
+          if (checkWin(cpuHand)) {
+            // CPUが上がった場合、ホストが全員のスコアを計算
+            const roundUpdates = { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand };
+            update(roomRef, roundUpdates).then(() => {
+              finalizeGameScores(currentPlayerId);
+            });
+            return;
           }
-          update(roomRef, updates);
+          
+          update(roomRef, { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand, hasDrawn: true });
         } else {
           await new Promise(r => setTimeout(r, 1200));
           const cpuHand = [...(players[currentPlayerId].hand || [])];
@@ -180,7 +204,7 @@ function App() {
       updates.turn = 0;
       updates.hasDrawn = false;
       updates.log = `第${nextRound}ラウンド開始！`;
-      updates.lastWinDetails = null; // リセット
+      updates.lastWinDetails = null;
       await update(roomRef, updates);
     } else {
       if (resetGame) setTotalScore(0);
@@ -214,7 +238,7 @@ function App() {
     });
   }, [gameMode, roomId]);
 
-  // --- アクション ---
+  // --- プレイヤーアクション ---
   const drawAction = () => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
@@ -226,17 +250,13 @@ function App() {
     const newHand = sortHand([...(curH || []), picked]);
 
     if (checkWin(newHand)) {
-      const sd = calculateScore(newHand, true);
       if (gameMode === "online") {
-        update(ref(db, `rooms/${roomId}`), {
-          status: "finished",
-          log: `${playerName}の勝利！`,
-          lastWinDetails: sd,
-          [`players/${myId}/hand`]: newHand,
-          [`players/${myId}/score`]: (players[myId].score || 0) + sd.total
+        update(ref(db, `rooms/${roomId}`), { [`players/${myId}/hand`]: newHand }).then(() => {
+          finalizeGameScores(myId);
         });
       } else {
         setHand(newHand);
+        const sd = calculateScore(newHand, true);
         setTotalScore(s => s + sd.total);
         setGameStatus("finished");
         setLastWinDetails(sd);
@@ -284,18 +304,17 @@ function App() {
     const newHand = sortHand([...curH, picked]);
 
     if (checkWin(newHand)) {
-      const sd = calculateScore(newHand, true);
       if (gameMode === "online") {
-        update(ref(db, `rooms/${roomId}`), {
+        update(ref(db, `rooms/${roomId}`), { 
           slots: ns,
-          status: "finished",
-          log: `${playerName}の勝利！`,
-          lastWinDetails: sd,
-          [`players/${myId}/hand`]: newHand,
-          [`players/${myId}/score`]: (players[myId].score || 0) + sd.total
+          [`players/${myId}/hand`]: newHand 
+        }).then(() => {
+          finalizeGameScores(myId);
         });
       } else {
-        setHand(newHand); setSlots(ns); setTotalScore(s => s + sd.total); setGameStatus("finished"); setLastWinDetails(sd);
+        setHand(newHand); setSlots(ns); 
+        const sd = calculateScore(newHand, true);
+        setTotalScore(s => s + sd.total); setGameStatus("finished"); setLastWinDetails(sd);
       }
       return;
     }
@@ -320,7 +339,6 @@ function App() {
     ) : null
   );
 
-  // --- メイン UI ---
   if (!gameMode) return (
     <div className="game-container menu-bg">
       <div className="start-screen main-menu">
@@ -365,6 +383,9 @@ function App() {
   const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
   const curHand = gameMode === "online" ? (players[myId]?.hand || []) : hand;
   const currentRank = Object.keys(players).map(id => ({ name: players[id].name, score: players[id].score || 0, isMe: id === myId })).sort((a,b)=>b.score-a.score);
+  
+  // 自分が今ラウンドで得たスコアを表示用
+  const myRoundScore = calculateScore(curHand, checkWin(curHand)).total;
 
   return (
     <div className="game-container">
@@ -419,12 +440,13 @@ function App() {
           </div>
         </div>
       )}
-      {gameStatus === "finished" && lastWinDetails && (
+      {gameStatus === "finished" && (
         <div className="win-overlay">
           <div className="win-card">
-            <h2 className="win-title">いただきます！</h2>
+            <h2 className="win-title">{checkWin(curHand) ? "いただきます！" : "ごちそうさま！"}</h2>
+            <p className="round-score-label">このラウンドの獲得スコア</p>
             <div className="win-score-display">
-              <span className="win-score-val">{lastWinDetails.total}</span>
+              <span className="win-score-val">+{myRoundScore}</span>
               <span className="win-score-unit">pt</span>
             </div>
             <button onClick={() => startAction(false)} className="mega-button">次のラウンドへ</button>
