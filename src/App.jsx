@@ -60,13 +60,13 @@ function App() {
   const checkWin = (currentHand) => getProcessedHand(currentHand).filter(c => c.isCompleted).length >= 9;
 
   const calculateScore = (finalHand, isWinner) => {
-    let total = isWinner ? 40 : 0;
+    let total = isWinner ? 30 : 0;
     const processed = getProcessedHand(finalHand);
     const checkedIds = new Set();
     const idCount = {}; 
     processed.forEach(c => idCount[c.id] = (idCount[c.id] || 0) + 1);
     Object.keys(idCount).forEach(id => {
-      if (idCount[id] >= 3) { total += 30; checkedIds.add(parseInt(id)); }
+      if (idCount[id] >= 3) { total += 25; checkedIds.add(parseInt(id)); }
     });
     ['野菜', '肉類', '魚介', '葉物'].forEach(cat => {
       const catCards = processed.filter(c => c.category === cat && !checkedIds.has(c.id));
