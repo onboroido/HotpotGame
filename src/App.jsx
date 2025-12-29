@@ -40,7 +40,6 @@ function App() {
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
 
-  // 判定ロジック
   const getProcessedHand = (currentHand) => {
     if (!currentHand || currentHand.length === 0) return [];
     let p = currentHand.map(c => ({ ...c, isCompleted: false }));
@@ -79,7 +78,6 @@ function App() {
     return { total };
   };
 
-  // ランキング計算
   const getRanking = () => {
     if (gameMode === "online") {
       return Object.keys(players).map(id => ({
@@ -104,10 +102,8 @@ function App() {
       for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()});
     });
     fullDeck.sort(() => Math.random() - 0.5);
-
     const nextRound = resetGame ? 1 : round + 1;
     if (resetGame) setTotalScore(0);
-
     if (mode === "cpu") {
       setRound(nextRound);
       setHand(sortHand(fullDeck.splice(0, 8)));
@@ -142,7 +138,6 @@ function App() {
     if (mode === "cpu") startAction(true, "cpu");
   };
 
-  // オンライン同期
   useEffect(() => {
     if (gameMode !== "online") return;
     let currentRoomId = roomId || Math.random().toString(36).substring(2, 7);
@@ -167,7 +162,6 @@ function App() {
     });
   }, [gameMode, roomId]);
 
-  // アクション処理 (抜粋: discard, draw, pickは以前のロジックと同じ)
   const drawAction = () => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
@@ -314,8 +308,10 @@ function App() {
             </div>
 
             <div className="middle-row">
-              <div className={`player-info-box side-player ${(turn === (mIdx + 1) % 4) ? 'active' : ''}`}>
-                {gameMode === "online" ? (players[pIds[(mIdx+1)%4]]?.name || "P2") : "CPU 1"}
+              <div className="side-player-container left">
+                <div className={`player-info-box side-player ${(turn === (mIdx + 1) % 4) ? 'active' : ''}`}>
+                  {gameMode === "online" ? (players[pIds[(mIdx+1)%4]]?.name || "P2") : "CPU 1"}
+                </div>
               </div>
 
               <div className="board-center">
@@ -328,8 +324,10 @@ function App() {
                 </div>
               </div>
 
-              <div className={`player-info-box side-player ${(turn === (mIdx + 3) % 4) ? 'active' : ''}`}>
-                {gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "P4") : "CPU 3"}
+              <div className="side-player-container right">
+                <div className={`player-info-box side-player ${(turn === (mIdx + 3) % 4) ? 'active' : ''}`}>
+                  {gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "P4") : "CPU 3"}
+                </div>
               </div>
             </div>
 
@@ -344,13 +342,13 @@ function App() {
           </div>
 
           <div className="ranking-side-panel">
-            <h3 className="ranking-title">SCORE RANKING</h3>
+            <h3 className="ranking-title">RANKING</h3>
             <div className="ranking-list">
               {getRanking().map((rank, index) => (
                 <div key={index} className={`ranking-item ${rank.isMe ? 'is-me' : ''}`}>
                   <span className="rank-num">{index + 1}</span>
                   <span className="rank-name">{rank.name}</span>
-                  <span className="rank-score">{rank.score}<small>pt</small></span>
+                  <span className="rank-score">{rank.score}</span>
                 </div>
               ))}
             </div>
