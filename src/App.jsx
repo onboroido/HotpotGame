@@ -40,7 +40,6 @@ function App() {
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
 
-  // 判定ロジック
   const getProcessedHand = (currentHand) => {
     if (!currentHand || currentHand.length === 0) return [];
     let p = currentHand.map(c => ({ ...c, isCompleted: false }));
@@ -79,7 +78,6 @@ function App() {
     return { total };
   };
 
-  // ゲーム開始（配布ミス防止のため、全ての更新を1つのupdateオブジェクトに集約）
   const startAction = useCallback((resetGame = false, forceMode = null) => {
     const mode = forceMode || gameMode;
     const fullDeck = [];
@@ -104,7 +102,6 @@ function App() {
     } else {
       const playerIds = Object.keys(players);
       if (playerIds.length === 0) return;
-
       const updates = {};
       playerIds.forEach(id => { 
         updates[`players/${id}/hand`] = sortHand(fullDeck.splice(0, 8)); 
@@ -117,19 +114,15 @@ function App() {
       updates['turn'] = 0;
       updates['hasDrawn'] = false;
       updates['log'] = `第${nextRound}ラウンド開始！`;
-      
       update(ref(db, `rooms/${roomId}`), updates);
     }
   }, [gameMode, round, players, roomId]);
 
   const selectMode = (mode) => {
     setGameMode(mode);
-    if (mode === "cpu") {
-      startAction(true, "cpu");
-    }
+    if (mode === "cpu") startAction(true, "cpu");
   };
 
-  // オンライン同期
   useEffect(() => {
     if (gameMode !== "online") return;
     let currentRoomId = roomId || Math.random().toString(36).substring(2, 7);
@@ -154,7 +147,6 @@ function App() {
     });
   }, [gameMode, roomId]);
 
-  // CPU思考
   useEffect(() => {
     if (gameMode === "cpu" && gameStatus === "playing" && turn !== 0) {
       const timer = setTimeout(() => {
@@ -188,7 +180,6 @@ function App() {
     }
   }, [turn, gameStatus, gameMode, cpuHands, deck, slots]);
 
-  // 手札・山札アクション
   const finishRound = (winningHand, isPlayerWinner, winnerName) => {
     const scoreDetails = calculateScore(winningHand, isPlayerWinner);
     if (isPlayerWinner) setTotalScore(prev => prev + scoreDetails.total);
@@ -309,7 +300,6 @@ function App() {
         <span className="badge-label">ROUND</span>
         <span className="badge-value">{round}/3</span>
       </div>
-
       <div className="score-badge-top-right">
         <span className="badge-label">SCORE</span>
         <span className="badge-value">{gameMode === "online" ? (players[myId]?.score || 0) : totalScore}<small>pt</small></span>
@@ -327,7 +317,7 @@ function App() {
               <input type="text" readOnly value={getInviteUrl()} className="url-input" />
               <button onClick={() => {navigator.clipboard.writeText(getInviteUrl()); alert("コピーしました！")}}>コピー</button>
             </div>
-            {pIds.length >= 1 && <button onClick={() => startAction(true)} className="mega-button">全員揃ったら開始</button>}
+            <button onClick={() => startAction(true)} className="mega-button">ゲーム開始</button>
           </div>
         </div>
       ) : (
