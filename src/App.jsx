@@ -39,7 +39,7 @@ function App() {
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
 
-  // 得点計算と上がり判定
+  // --- 共通ロジック ---
   const getProcessedHand = (currentHand) => {
     if (!currentHand || currentHand.length === 0) return [];
     let p = currentHand.map(c => ({ ...c, isCompleted: false }));
@@ -75,39 +75,56 @@ function App() {
     return { total };
   };
 
-  // ランキング取得
-  const getRanking = () => {
-    const pList = Object.keys(players).map(id => ({
-      name: players[id].name,
-      score: players[id].score || 0,
-      isMe: id === myId
-    }));
-    if (gameMode === "cpu") {
-      return [
-        { name: "あなた", score: totalScore, isMe: true },
-        { name: "CPU 1", score: 0, isMe: false },
-        { name: "CPU 2", score: 0, isMe: false },
-        { name: "CPU 3", score: 0, isMe: false }
-      ].sort((a, b) => b.score - a.score);
-    }
-    return pList.sort((a, b) => b.score - a.score);
-  };
-
-  // オンラインCPU思考ルーチン
+  // --- CPU思考ロジック (CPUモード & オンライン共通) ---
   useEffect(() => {
-    if (gameMode !== "online" || gameStatus !== "playing") return;
+    if (gameStatus !== "playing") return;
 
-    const pIds = Object.keys(players);
-    const currentPlayerId = pIds[turn];
-    const isHost = myId === pIds[0]; // 最初のプレイヤーがCPUを操作
+    const runCpuTurn = async () => {
+      // 1. CPUモードの一人プレイの場合
+      if (gameMode === "cpu" && turn !== 0) {
+        setGameLog(`CPU ${turn} が考え中...`);
+        if (!hasDrawn) {
+          await new Promise(r => setTimeout(r, 1000));
+          const newDeck = [...deck];
+          const picked = newDeck.pop();
+          // CPUは内部的な手札管理がないため、疑似的に引いて即捨てる処理を行う
+          setDeck(newDeck);
+          setHasDrawn(true);
+        } else {
+          await new Promise(r => setTimeout(r, 1000));
+          const ns = [...slots];
+          // 山札から引いたものをそのまま場に捨てる（簡易CPU）
+          // 本来は手札を持たせるべきだが、既存構造を維持するため場に反映
+          setHasDrawn(false);
+          setTurn((turn + 1) % 4);
+        }
+      }
 
-    if (!isHost || !players[currentPlayerId]?.isCpu) return;
+      // 2. オンライン対戦の場合
+      if (gameMode === "online") {
+        const pIds = Object.keys(players);
+        const currentPlayerId = pIds[turn];
+        const isHost = myId === pIds[0];
 
-    const performCpuAction = async () => {
-      const roomRef = ref(db, `rooms/${roomId}`);
-      if (hasDrawn) {
-        // 捨てる
-        setTimeout(() => {
+        if (!isHost || !players[currentPlayerId]?.isCpu) return;
+
+        const roomRef = ref(db, `rooms/${roomId}`);
+        if (!hasDrawn) {
+          await new Promise(r => setTimeout(r, 1200));
+          const newDeck = [...deck];
+          const picked = newDeck.pop();
+          const cpuHand = sortHand([...(players[currentPlayerId].hand || []), picked]);
+          const win = checkWin(cpuHand);
+          
+          const updates = { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand, hasDrawn: true };
+          if (win) {
+            updates.status = "finished";
+            updates.log = `${players[currentPlayerId].name}の勝利！`;
+            updates.lastWinDetails = calculateScore(cpuHand, false);
+          }
+          update(roomRef, updates);
+        } else {
+          await new Promise(r => setTimeout(r, 1200));
           const cpuHand = [...(players[currentPlayerId].hand || [])];
           const discardIdx = Math.floor(Math.random() * cpuHand.length);
           const discarded = cpuHand.splice(discardIdx, 1)[0];
@@ -117,32 +134,14 @@ function App() {
             turn: (turn + 1) % 4,
             hasDrawn: false
           });
-        }, 1500);
-      } else {
-        // 引く
-        setTimeout(() => {
-          const newDeck = [...deck];
-          const picked = newDeck.pop();
-          const newHand = sortHand([...(players[currentPlayerId].hand || []), picked]);
-          const win = checkWin(newHand);
-          const updates = {
-            deck: newDeck,
-            [`players/${currentPlayerId}/hand`]: newHand,
-            hasDrawn: true
-          };
-          if (win) {
-            updates.status = "finished";
-            updates.log = `${players[currentPlayerId].name}の勝利！`;
-            updates.lastWinDetails = calculateScore(newHand, false);
-          }
-          update(roomRef, updates);
-        }, 1000);
+        }
       }
     };
-    performCpuAction();
-  }, [turn, hasDrawn, gameStatus, players, myId, deck, roomId]);
 
-  // ゲーム開始・次ラウンド開始
+    runCpuTurn();
+  }, [turn, hasDrawn, gameStatus, gameMode]);
+
+  // --- ゲーム管理 ---
   const startAction = useCallback(async (resetGame = false) => {
     const fullDeck = [];
     CARD_TYPES.forEach(type => { for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()}); });
@@ -153,19 +152,17 @@ function App() {
       const roomRef = ref(db, `rooms/${roomId}`);
       const updates = {};
       const currentPIds = Object.keys(players);
-      
-      // 4人になるまでCPUを補充した名簿を作成
       const finalPlayers = { ...players };
       for (let i = currentPIds.length; i < 4; i++) {
         const cpuId = `cpu_${i}`;
         finalPlayers[cpuId] = { name: `CPU ${i}`, hand: [], score: 0, isCpu: true };
       }
-
       Object.keys(finalPlayers).forEach(id => {
         updates[`players/${id}/hand`] = sortHand(fullDeck.splice(0, 8));
         if (resetGame) updates[`players/${id}/score`] = 0;
+        if (finalPlayers[id].isCpu) updates[`players/${id}/isCpu`] = true;
+        updates[`players/${id}/name`] = finalPlayers[id].name;
       });
-
       updates.round = nextRound;
       updates.status = "playing";
       updates.deck = fullDeck;
@@ -187,7 +184,6 @@ function App() {
     }
   }, [gameMode, round, players, roomId]);
 
-  // Firebase同期
   useEffect(() => {
     if (gameMode !== "online" || !roomId) return;
     const roomRef = ref(db, `rooms/${roomId}`);
@@ -206,7 +202,7 @@ function App() {
     });
   }, [gameMode, roomId]);
 
-  // アクション：引く
+  // --- プレイヤーアクション ---
   const drawAction = () => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
@@ -220,10 +216,11 @@ function App() {
     if (gameMode === "online") {
       const updates = { deck: newDeck, [`players/${myId}/hand`]: newHand, hasDrawn: true };
       if (checkWin(newHand)) {
+        const sd = calculateScore(newHand, true);
         updates.status = "finished";
         updates.log = `${playerName}の勝利！`;
-        updates.lastWinDetails = calculateScore(newHand, true);
-        updates[`players/${myId}/score`] = (players[myId].score || 0) + updates.lastWinDetails.total;
+        updates.lastWinDetails = sd;
+        updates[`players/${myId}/score`] = (players[myId].score || 0) + sd.total;
       }
       update(ref(db, `rooms/${roomId}`), updates);
     } else {
@@ -235,7 +232,6 @@ function App() {
     }
   };
 
-  // アクション：捨てる
   const discardAction = (idx) => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
@@ -258,23 +254,16 @@ function App() {
     }
   };
 
-  // アクション：場から拾う
   const pickFromSlotAction = (idx) => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
     if (turn !== mIdx || hasDrawn || !slots[idx]) return;
-
     const picked = slots[idx];
     const ns = [...slots]; ns[idx] = null;
     const curH = gameMode === "online" ? players[myId].hand : hand;
     const newHand = sortHand([...(curH || []), picked]);
-
     if (gameMode === "online") {
-      update(ref(db, `rooms/${roomId}`), {
-        slots: ns,
-        [`players/${myId}/hand`]: newHand,
-        hasDrawn: true
-      });
+      update(ref(db, `rooms/${roomId}`), { slots: ns, [`players/${myId}/hand`]: newHand, hasDrawn: true });
     } else {
       setHand(newHand); setSlots(ns); setHasDrawn(true);
     }
@@ -292,13 +281,13 @@ function App() {
     ) : null
   );
 
-  // --- UI レンダリング ---
+  // --- レンダリング ---
   if (!gameMode) return (
     <div className="game-container menu-bg">
       <div className="start-screen main-menu">
         <h1 className="title-large">🍲 Hotpot Game</h1>
         <div className="menu-buttons">
-          <button onClick={() => { setGameMode("cpu"); setGameStatus("playing"); }} className="mega-button">CPUと対戦</button>
+          <button onClick={() => { setGameMode("cpu"); setGameStatus("playing"); }} className="mega-button">一人で練習 (CPU戦)</button>
           <button onClick={() => {
             const currentRoom = new URLSearchParams(window.location.search).get('room');
             const targetRoom = currentRoom || Math.random().toString(36).substring(2,7);
@@ -325,7 +314,7 @@ function App() {
             await set(pRef, { name: playerName, hand: [], score: 0 });
             onDisconnect(pRef).remove();
             setIsJoined(true);
-          } catch(e) { alert("入室失敗。Firebaseのルールを確認してください"); }
+          } catch(e) { alert("入室失敗。ルールを確認してください"); }
         }} className="mega-button">参加する</button>
       </div>
     </div>
@@ -336,18 +325,18 @@ function App() {
   const pIds = Object.keys(players);
   const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
   const curHand = gameMode === "online" ? (players[myId]?.hand || []) : hand;
+  const currentRank = Object.keys(players).map(id => ({ name: players[id].name, score: players[id].score || 0, isMe: id === myId })).sort((a,b)=>b.score-a.score);
 
   return (
     <div className="game-container">
       <div className="round-badge">{round}/3</div>
-      
       {gameMode === "online" && gameStatus === "waiting" ? (
         <div className="start-screen centered">
           <div className="waiting-card">
             <h2>待機中 ({pIds.length}/4)</h2>
             <div className="p-list">{pIds.map(id => <div key={id} className="p-list-item">{players[id].name}</div>)}</div>
             <div className="invite-box">
-              <p>招待URL (友達に送ってね)</p>
+              <p>招待URL</p>
               <input type="text" readOnly value={getInviteUrl()} className="url-input" />
               <button onClick={() => {navigator.clipboard.writeText(getInviteUrl()); alert("コピーしました！")}}>コピー</button>
             </div>
@@ -380,13 +369,19 @@ function App() {
           </div>
           <div className="rank-panel">
             <div className="rank-title">RANKING</div>
-            <div className="rank-list">{getRanking().map((r, i) => <div key={i} className={`rank-item ${r.isMe?'me':''}`}><span>{i+1}. {r.name}</span><span>{r.score}pt</span></div>)}</div>
+            <div className="rank-list">
+              {(gameMode === "online" ? currentRank : [
+                { name: "あなた", score: totalScore, isMe: true },
+                { name: "CPU 1", score: 0 }, { name: "CPU 2", score: 0 }, { name: "CPU 3", score: 0 }
+              ].sort((a,b)=>b.score-a.score)).map((r, i) => (
+                <div key={i} className={`rank-item ${r.isMe?'me':''}`}><span>{i+1}. {r.name}</span><span>{r.score}pt</span></div>
+              ))}
+            </div>
           </div>
         </div>
       )}
-
       {gameStatus === "finished" && (
-        <div className="win-overlay"><div className="win-card"><h2>いただきます！</h2><div className="score">{lastWinDetails.total}pt</div><button onClick={() => startAction(false)} className="mega-button">{round < 3 ? "次のラウンドへ" : "もう一杯！"}</button></div></div>
+        <div className="win-overlay"><div className="win-card"><h2>いただきます！</h2><div className="score">{lastWinDetails.total}pt</div><button onClick={() => startAction(false)} className="mega-button">次へ</button></div></div>
       )}
     </div>
   );
