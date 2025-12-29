@@ -43,11 +43,15 @@ function App() {
   const getProcessedHand = (currentHand) => {
     if (!currentHand || currentHand.length === 0) return [];
     let p = currentHand.map(c => ({ ...c, isCompleted: false }));
+    
+    // 1. 同種3枚セットの判定
     const counts = {};
     p.forEach(c => { counts[c.id] = (counts[c.id] || 0) + 1; });
     p = p.map(c => counts[c.id] >= 3 ? { ...c, isCompleted: true } : c);
+    
+    // 2. 同カテゴリ3種セットの判定（同種セットになっていないカードから選ぶ）
     ['野菜', '肉類', '魚介', '葉物'].forEach(cat => {
-      const catCards = p.filter(c => c.category === cat && !c.isCompleted);
+      let catCards = p.filter(c => c.category === cat && !c.isCompleted);
       const uniqueIds = [...new Set(catCards.map(c => c.id))];
       if (uniqueIds.length >= 3) {
         const usedIds = uniqueIds.slice(0, 3);
@@ -60,19 +64,25 @@ function App() {
   const checkWin = (currentHand) => getProcessedHand(currentHand).filter(c => c.isCompleted).length >= 9;
 
   const calculateScore = (finalHand, isWinner) => {
-    let total = isWinner ? 25 : 0; // 勝利ボーナス: 25点
+    let total = isWinner ? 25 : 0;
     const processed = getProcessedHand(finalHand);
-    const checkedIds = new Set();
-    const idCount = {}; 
-    processed.forEach(c => idCount[c.id] = (idCount[c.id] || 0) + 1);
-    Object.keys(idCount).forEach(id => {
-      if (idCount[id] >= 3) { total += 25; checkedIds.add(parseInt(id)); } // 同種3枚: 25点
-    });
+    
+    // 同種3枚セットの得点計算（IDごとにカウント）
+    const counts = {};
+    finalHand.forEach(c => { counts[c.id] = (counts[c.id] || 0) + 1; });
+    const sameTypeSets = Object.values(counts).filter(count => count >= 3).length;
+    total += sameTypeSets * 25;
+
+    // カテゴリセットの得点計算
+    // 同種セットになっていないカードの中で、カテゴリごとにユニークなIDが3つ以上あれば加算
     ['野菜', '肉類', '魚介', '葉物'].forEach(cat => {
-      const catCards = processed.filter(c => c.category === cat && !checkedIds.has(c.id));
-      const uIds = [...new Set(catCards.map(c => c.id))];
-      if (uIds.length >= 3) total += 15; // 同カテゴリ3種: 15点
+      const remainingInCat = processed.filter(c => c.category === cat && c.isCompleted && counts[c.id] < 3);
+      const uniqueIds = [...new Set(remainingInCat.map(c => c.id))];
+      if (uniqueIds.length >= 3) {
+        total += 15;
+      }
     });
+
     return { total };
   };
 
@@ -91,11 +101,10 @@ function App() {
       updates.lastRoundHands = roundHands;
       update(ref(db, `rooms/${roomId}`), updates);
     } else {
-      // CPUモード用
       const cpuIds = ["me", "cpu1", "cpu2", "cpu3"];
       const roundHands = {};
       cpuIds.forEach((id, idx) => {
-        const isWinner = (idx === (typeof winnerId === 'number' ? winnerId : 0));
+        const isWinner = (id === "me" ? winnerId === "me" || winnerId === 0 : winnerId === id || winnerId === idx);
         const currentH = (id === "me") ? hand : [];
         const scoreData = calculateScore(currentH, isWinner);
         if(id === "me") setTotalScore(s => s + scoreData.total);
@@ -154,7 +163,6 @@ function App() {
     runCpuTurn();
   }, [turn, hasDrawn, gameStatus, gameMode, deck, players, roomId, myId]);
 
-  // --- ゲーム管理 ---
   const startAction = useCallback(async (resetGame = false) => {
     setShowFinalResult(false);
     setLastRoundHands(null);
@@ -212,7 +220,6 @@ function App() {
     });
   }, [gameMode, roomId]);
 
-  // --- アクション ---
   const drawAction = () => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
