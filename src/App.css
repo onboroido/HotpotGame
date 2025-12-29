@@ -71,7 +71,6 @@ body {
   box-shadow: 0 0 15px var(--accent-gold);
 }
 
-/* ボードセンター */
 .board-center {
   width: 400px;
   height: 400px;
@@ -170,6 +169,22 @@ body {
 .card-icon { font-size: 32px; margin: 10px 0; }
 .card-name { font-size: 12px; font-weight: bold; text-align: center; }
 
+/* 揃ったときのバッジ */
+.set-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #ff5722;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px;
+  border: 2px solid white;
+  z-index: 5;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
 /* 手札 */
 .hand {
   display: flex;
@@ -220,7 +235,7 @@ body {
   font-size: 18px;
 }
 
-/* 各種オーバーレイ */
+/* 勝利オーバーレイ */
 .win-overlay {
   position: fixed;
   inset: 0;
@@ -228,16 +243,39 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 2000;
 }
 
 .win-card {
-  background: #fff;
+  background: white;
   color: #333;
-  padding: 40px;
-  border-radius: 20px;
+  padding: 50px;
+  border-radius: 30px;
   text-align: center;
-  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 0 50px rgba(241, 196, 15, 0.5);
+  animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.win-title {
+  font-size: 48px;
+  margin-bottom: 20px;
+  color: #e67e22;
+  font-family: "Sawarabi Mincho", serif;
+}
+
+.win-score-display {
+  margin-bottom: 30px;
+}
+
+.win-score-val {
+  font-size: 72px;
+  font-weight: bold;
+  color: #c0392b;
+}
+
+.win-score-unit {
+  font-size: 24px;
+  margin-left: 10px;
 }
 
 @keyframes popIn {
@@ -269,4 +307,5 @@ body {
   font-size: 24px;
   font-weight: bold;
   border: 1px solid var(--accent-gold);
+  z-index: 10;
 }
