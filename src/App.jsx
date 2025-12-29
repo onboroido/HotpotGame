@@ -44,18 +44,18 @@ function App() {
     if (!currentHand || currentHand.length === 0) return [];
     let p = currentHand.map(c => ({ ...c, isCompleted: false }));
     
-    // 1. 同種3枚セットの判定
+    // 1. 同種3枚セット
     const counts = {};
     p.forEach(c => { counts[c.id] = (counts[c.id] || 0) + 1; });
     p = p.map(c => counts[c.id] >= 3 ? { ...c, isCompleted: true } : c);
     
-    // 2. 同カテゴリ3種セットの判定（同種セットになっていないカードから選ぶ）
+    // 2. 同カテゴリ3種セット
     ['野菜', '肉類', '魚介', '葉物'].forEach(cat => {
-      let catCards = p.filter(c => c.category === cat && !c.isCompleted);
-      const uniqueIds = [...new Set(catCards.map(c => c.id))];
+      let available = p.filter(c => c.category === cat && !c.isCompleted);
+      const uniqueIds = [...new Set(available.map(c => c.id))];
       if (uniqueIds.length >= 3) {
-        const usedIds = uniqueIds.slice(0, 3);
-        p = p.map(c => (c.category === cat && usedIds.includes(c.id) && !c.isCompleted) ? { ...c, isCompleted: true } : c);
+        const targetIds = uniqueIds.slice(0, 3);
+        p = p.map(c => (c.category === cat && targetIds.includes(c.id) && !c.isCompleted) ? { ...c, isCompleted: true } : c);
       }
     });
     return p;
@@ -63,39 +63,60 @@ function App() {
 
   const checkWin = (currentHand) => getProcessedHand(currentHand).filter(c => c.isCompleted).length >= 9;
 
+  // 9枚の手札を元にスコアを計算する
   const calculateScore = (finalHand, isWinner) => {
-    let total = isWinner ? 25 : 0;
-    const processed = getProcessedHand(finalHand);
+    let score = isWinner ? 25 : 0; 
+    let p = finalHand.map(c => ({ ...c, isCompleted: false }));
     
-    // 同種3枚セットの得点計算（IDごとにカウント）
+    // 1. 同種3枚セット (25点)
     const counts = {};
-    finalHand.forEach(c => { counts[c.id] = (counts[c.id] || 0) + 1; });
-    const sameTypeSets = Object.values(counts).filter(count => count >= 3).length;
-    total += sameTypeSets * 25;
-
-    // カテゴリセットの得点計算
-    // 同種セットになっていないカードの中で、カテゴリごとにユニークなIDが3つ以上あれば加算
-    ['野菜', '肉類', '魚介', '葉物'].forEach(cat => {
-      const remainingInCat = processed.filter(c => c.category === cat && c.isCompleted && counts[c.id] < 3);
-      const uniqueIds = [...new Set(remainingInCat.map(c => c.id))];
-      if (uniqueIds.length >= 3) {
-        total += 15;
+    p.forEach(c => { counts[c.id] = (counts[c.id] || 0) + 1; });
+    Object.keys(counts).forEach(id => {
+      if (counts[id] >= 3) {
+        score += 25;
+        let count = 0;
+        p = p.map(c => {
+          if (c.id === parseInt(id) && count < 3) {
+            count++;
+            return { ...c, isCompleted: true };
+          }
+          return c;
+        });
       }
     });
 
-    return { total };
+    // 2. 同カテゴリ3種セット (15点)
+    ['野菜', '肉類', '魚介', '葉物'].forEach(cat => {
+      let available = p.filter(c => c.category === cat && !c.isCompleted);
+      const uniqueIds = [...new Set(available.map(c => c.id))];
+      while (uniqueIds.length >= 3) {
+        score += 15;
+        const targetIds = uniqueIds.splice(0, 3);
+        p = p.map(c => {
+          if (c.category === cat && targetIds.includes(c.id) && !c.isCompleted) {
+            return { ...c, isCompleted: true };
+          }
+          return c;
+        });
+      }
+    });
+
+    return { total: score };
   };
 
-  const finalizeGameScores = (winnerId = null) => {
+  // 勝利時の手札(9枚)を渡して計算を完結させる
+  const finalizeGameScores = (winnerId = null, winningHand = null) => {
     if (gameMode === "online") {
       const pIds = Object.keys(players);
       const updates = {};
       const roundHands = {};
       pIds.forEach(id => {
         const isWinner = (id === winnerId);
-        const scoreData = calculateScore(players[id].hand || [], isWinner);
+        // 自身が勝者の場合は winningHand(9枚)を使用、それ以外は現在の手札を使用
+        const targetHand = isWinner ? winningHand : (players[id].hand || []);
+        const scoreData = calculateScore(targetHand, isWinner);
         updates[`players/${id}/score`] = (players[id].score || 0) + scoreData.total;
-        roundHands[id] = { name: players[id].name, hand: players[id].hand || [], isWinner, roundScore: scoreData.total };
+        roundHands[id] = { name: players[id].name, hand: targetHand, isWinner, roundScore: scoreData.total };
       });
       updates.status = "finished";
       updates.lastRoundHands = roundHands;
@@ -105,10 +126,10 @@ function App() {
       const roundHands = {};
       cpuIds.forEach((id, idx) => {
         const isWinner = (id === "me" ? winnerId === "me" || winnerId === 0 : winnerId === id || winnerId === idx);
-        const currentH = (id === "me") ? hand : [];
-        const scoreData = calculateScore(currentH, isWinner);
+        const targetHand = isWinner ? winningHand : (id === "me" ? hand : []);
+        const scoreData = calculateScore(targetHand, isWinner);
         if(id === "me") setTotalScore(s => s + scoreData.total);
-        roundHands[id] = { name: id === "me" ? "あなた" : `CPU ${idx}`, hand: currentH, isWinner, roundScore: scoreData.total };
+        roundHands[id] = { name: id === "me" ? "あなた" : `CPU ${idx}`, hand: targetHand, isWinner, roundScore: scoreData.total };
       });
       setLastRoundHands(roundHands);
       setGameStatus("finished");
@@ -148,7 +169,8 @@ function App() {
           const picked = newDeck.pop();
           const cpuHand = sortHand([...(players[currentPlayerId].hand || []), picked]);
           if (checkWin(cpuHand)) {
-            update(roomRef, { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand }).then(() => finalizeGameScores(currentPlayerId));
+            // 勝利したCPUの9枚の手札を渡して終了
+            finalizeGameScores(currentPlayerId, cpuHand);
             return;
           }
           update(roomRef, { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand, hasDrawn: true });
@@ -229,7 +251,7 @@ function App() {
     const curH = gameMode === "online" ? players[myId].hand : hand;
     const newHand = sortHand([...(curH || []), picked]);
     if (checkWin(newHand)) {
-      finalizeGameScores(gameMode === "online" ? myId : 0);
+      finalizeGameScores(gameMode === "online" ? myId : 0, newHand);
       return;
     }
     if (gameMode === "online") update(ref(db, `rooms/${roomId}`), { deck: newDeck, [`players/${myId}/hand`]: newHand, hasDrawn: true });
@@ -260,7 +282,7 @@ function App() {
     const curH = gameMode === "online" ? (players[myId]?.hand || []) : hand;
     const newHand = sortHand([...curH, picked]);
     if (checkWin(newHand)) {
-      finalizeGameScores(gameMode === "online" ? myId : 0);
+      finalizeGameScores(gameMode === "online" ? myId : 0, newHand);
       return;
     }
     if (gameMode === "online") update(ref(db, `rooms/${roomId}`), { slots: ns, [`players/${myId}/hand`]: newHand, hasDrawn: true });
