@@ -69,3 +69,23 @@ body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; o
 .win-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .win-card { background: #fff; color: #333; padding: 40px; border-radius: 25px; text-align: center; border: 5px solid var(--gold); }
 .score { font-size: 32px; font-weight: bold; margin: 15px 0; color: #e67e22; }
+/* 既存のApp.cssに追加/上書き */
+.room-info-text {
+  font-size: 14px;
+  color: var(--gold);
+  margin-bottom: 15px;
+  background: rgba(0,0,0,0.3);
+  padding: 5px 15px;
+  border-radius: 20px;
+}
+
+.p-list-item {
+  padding: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  font-weight: bold;
+}
+
+.invite-box p {
+  margin: 0 0 5px 0;
+  color: #aaa;
+}

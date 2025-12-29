@@ -30,7 +30,7 @@ function App() {
   const [slots, setSlots] = useState([null, null, null, null]);
   const [turn, setTurn] = useState(0);
   const [round, setRound] = useState(1);
-  const [gameLog, setGameLog] = useState("準備中...");
+  const [gameLog, setGameLog] = useState("対戦相手を待っています...");
   const [hasDrawn, setHasDrawn] = useState(false);
   const [lastWinDetails, setLastWinDetails] = useState({ total: 0 });
   const [hand, setHand] = useState([]); 
@@ -39,7 +39,6 @@ function App() {
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
 
-  // 手札判定ロジック
   const getProcessedHand = (currentHand) => {
     if (!currentHand || currentHand.length === 0) return [];
     let p = currentHand.map(c => ({ ...c, isCompleted: false }));
@@ -91,15 +90,19 @@ function App() {
     ].sort((a, b) => b.score - a.score);
   };
 
-  // ゲーム開始アクション
   const startAction = useCallback((resetGame = false) => {
     const fullDeck = [];
     CARD_TYPES.forEach(type => { for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()}); });
     fullDeck.sort(() => Math.random() - 0.5);
     const nextRound = resetGame ? 1 : round + 1;
 
+    // スコアの初期化を確実に
+    if (resetGame) {
+        setTotalScore(0);
+        setLastWinDetails({ total: 0 });
+    }
+
     if (gameMode === "cpu") {
-      if (resetGame) setTotalScore(0);
       setRound(nextRound);
       setHand(sortHand(fullDeck.splice(0, 8)));
       setDeck(fullDeck);
@@ -121,30 +124,34 @@ function App() {
       updates['slots'] = [null, null, null, null];
       updates['turn'] = 0;
       updates['hasDrawn'] = false;
+      updates['lastWinDetails'] = { total: 0 }; // オンラインでもリセット
       updates['log'] = `第${nextRound}ラウンド開始！`;
       update(ref(db, `rooms/${roomId}`), updates);
     }
   }, [gameMode, round, players, roomId, totalScore]);
 
-  // オンライン同期
+  // オンライン同期ロジックの強化
   useEffect(() => {
     if (gameMode !== "online" || !roomId) return;
     const roomRef = ref(db, `rooms/${roomId}`);
-    return onValue(roomRef, (snapshot) => {
+    const unsubscribe = onValue(roomRef, (snapshot) => {
       const data = snapshot.val();
       if (!data) return;
+      // プレイヤーが揃っていない状態でもデータがあれば更新
       setPlayers(data.players || {});
       setGameStatus(data.status || "waiting");
       setDeck(data.deck || []);
       setSlots(data.slots || [null, null, null, null]);
       setTurn(data.turn || 0);
       setRound(data.round || 1);
-      setGameLog(data.log || "");
+      setGameLog(data.log || "対戦相手を待っています...");
       setHasDrawn(data.hasDrawn || false);
       if (data.lastWinDetails) setLastWinDetails(data.lastWinDetails);
     });
+    return () => unsubscribe();
   }, [gameMode, roomId]);
 
+  // アクション類 (変化なし)
   const drawAction = () => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
@@ -217,9 +224,7 @@ function App() {
     ) : null
   );
 
-  // --- 画面分岐 ---
-
-  // 1. メインメニュー
+  // メニュー
   if (!gameMode) return (
     <div className="game-container menu-bg">
       <div className="start-screen main-menu">
@@ -227,28 +232,28 @@ function App() {
         <div className="menu-buttons">
           <button onClick={() => { setGameMode("cpu"); setGameStatus("playing"); }} className="mega-button">CPUと対戦</button>
           <button onClick={() => {
+            const currentRoom = new URLSearchParams(window.location.search).get('room');
+            const targetRoom = currentRoom || Math.random().toString(36).substring(2,7);
+            setRoomId(targetRoom);
             setGameMode("online");
-            if(!roomId) {
-              const r = Math.random().toString(36).substring(2,7);
-              setRoomId(r);
-              window.history.pushState({}, '', `?room=${r}`);
-            }
+            if(!currentRoom) window.history.pushState({}, '', `?room=${targetRoom}`);
           }} className="mega-button">オンライン対戦</button>
         </div>
       </div>
     </div>
   );
 
-  // 2. CPU戦（即座に開始）
+  // CPU戦
   if (gameMode === "cpu" && gameStatus === "playing" && hand.length === 0) {
     startAction(true);
   }
 
-  // 3. オンライン戦：名前入力
+  // 名前入力
   if (gameMode === "online" && !isJoined) return (
     <div className="game-container">
       <div className="start-screen">
         <h2 className="section-title">プレイヤー登録</h2>
+        <p className="room-info-text">Room ID: {roomId}</p>
         <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} className="name-input-large" placeholder="名前を入力" />
         <button onClick={() => {
           if (!playerName.trim()) return;
@@ -270,7 +275,6 @@ function App() {
     <div className="game-container">
       <div className="round-badge">{round}/3</div>
       
-      {/* 待機画面（オンラインかつ準備中のみ表示） */}
       {gameMode === "online" && gameStatus === "waiting" ? (
         <div className="start-screen centered">
           <div className="waiting-card">
@@ -281,23 +285,15 @@ function App() {
               <input type="text" readOnly value={getInviteUrl()} className="url-input" />
               <button onClick={() => {navigator.clipboard.writeText(getInviteUrl()); alert("コピーしました！")}}>コピー</button>
             </div>
-            <button onClick={() => startAction(true)} className="mega-button">全員揃ったら開始</button>
+            {pIds.length >= 1 && <button onClick={() => startAction(true)} className="mega-button">全員揃ったら開始</button>}
           </div>
         </div>
       ) : (
         <div className="playing-wrapper">
           <div className="main-area">
-            <div className="row top">
-              <div className={`p-box ${(turn === (mIdx + 2) % 4) ? 'active' : ''}`}>
-                {gameMode === "online" ? (players[pIds[(mIdx+2)%4]]?.name || "P3") : "CPU 2"}
-              </div>
-            </div>
+            <div className="row top"><div className={`p-box ${(turn === (mIdx+2)%4) ? 'active' : ''}`}>{gameMode === "online" ? (players[pIds[(mIdx+2)%4]]?.name || "P3") : "CPU 2"}</div></div>
             <div className="row middle">
-              <div className="side-container left">
-                <div className={`p-box ${(turn === (mIdx + 1) % 4) ? 'active' : ''}`}>
-                  {gameMode === "online" ? (players[pIds[(mIdx+1)%4]]?.name || "P2") : "CPU 1"}
-                </div>
-              </div>
+              <div className="side-container left"><div className={`p-box ${(turn === (mIdx+1)%4) ? 'active' : ''}`}>{gameMode === "online" ? (players[pIds[(mIdx+1)%4]]?.name || "P2") : "CPU 1"}</div></div>
               <div className="board-center">
                 <div className="slots-grid">
                   <div className="slot t" onClick={()=>pickFromSlotAction((mIdx+2)%4)}><CardDisplay card={slots[(mIdx+2)%4]}/></div>
@@ -307,11 +303,7 @@ function App() {
                   <div className="slot b" onClick={()=>pickFromSlotAction(mIdx)}><CardDisplay card={slots[mIdx]}/></div>
                 </div>
               </div>
-              <div className="side-container right">
-                <div className={`p-box ${(turn === (mIdx + 3) % 4) ? 'active' : ''}`}>
-                  {gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "P4") : "CPU 3"}
-                </div>
-              </div>
+              <div className="side-container right"><div className={`p-box ${(turn === (mIdx+3)%4) ? 'active' : ''}`}>{gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "P4") : "CPU 3"}</div></div>
             </div>
             <div className="row bottom">
               <div className="log">{gameLog}</div>
@@ -322,24 +314,15 @@ function App() {
           </div>
           <div className="rank-panel">
             <div className="rank-title">RANKING</div>
-            <div className="rank-list">
-              {getRanking().map((r, i) => <div key={i} className={`rank-item ${r.isMe?'me':''}`}><span>{i+1}. {r.name}</span><span>{r.score}pt</span></div>)}
-            </div>
+            <div className="rank-list">{getRanking().map((r, i) => <div key={i} className={`rank-item ${r.isMe?'me':''}`}><span>{i+1}. {r.name}</span><span>{r.score}pt</span></div>)}</div>
           </div>
         </div>
       )}
 
       {gameStatus === "finished" && (
-        <div className="win-overlay">
-          <div className="win-card">
-            <h2>いただきます！</h2>
-            <div className="score">{lastWinDetails.total}pt</div>
-            <button onClick={() => startAction(false)} className="mega-button">{round < 3 ? "次のラウンドへ" : "もう一杯！"}</button>
-          </div>
-        </div>
+        <div className="win-overlay"><div className="win-card"><h2>いただきます！</h2><div className="score">{lastWinDetails.total}pt</div><button onClick={() => startAction(false)} className="mega-button">{round < 3 ? "次のラウンドへ" : "もう一杯！"}</button></div></div>
       )}
     </div>
   );
 }
-
 export default App;
