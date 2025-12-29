@@ -56,7 +56,7 @@ function App() {
         if (data.lastWinDetails) setLastWinDetails(data.lastWinDetails);
       }
     });
-  }, [gameMode]);
+  }, [gameMode, roomId]);
 
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
 
@@ -141,7 +141,7 @@ function App() {
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [turn, gameStatus, gameMode]);
+  }, [turn, gameStatus, gameMode, cpuHands, deck, slots]);
 
   const startAction = () => {
     const fullDeck = [];
@@ -226,6 +226,7 @@ function App() {
     );
   };
 
+  // 1. モード選択画面
   if (!gameMode) {
     return (
       <div className="game-container full-height">
@@ -235,6 +236,28 @@ function App() {
             <button onClick={() => setGameMode("cpu")} className="mega-button">CPUと対戦</button>
             <button onClick={() => setGameMode("online")} className="mega-button">オンライン対戦</button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. 名前入力画面 (オンラインのみ)
+  if (gameMode === "online" && !isJoined) {
+    return (
+      <div className="game-container full-height">
+        <div className="start-screen">
+          <h2 className="section-title">オンライン対戦</h2>
+          <input type="text" value={playerName} onChange={(e)=>setPlayerName(e.target.value)} className="name-input-large" placeholder="あなたの名前を入力" />
+          <button onClick={() => {
+            if (!playerName) return alert("名前を入力してください");
+            const playersRef = ref(db, `rooms/${roomId}/players`);
+            const newPlayerRef = push(playersRef);
+            setMyId(newPlayerRef.key);
+            set(newPlayerRef, { name: playerName, joinedAt: serverTimestamp(), hand: [] });
+            onDisconnect(newPlayerRef).remove();
+            setIsJoined(true);
+          }} className="mega-button">入室する</button>
+          <p className="invite-info">このURLを友だちに送ってください：<br/>{window.location.href}</p>
         </div>
       </div>
     );
@@ -254,24 +277,40 @@ function App() {
         <div className="mini-log-text">{gameLog}</div>
       </div>
 
-      <div className="top-bar"><span>{gameMode === "online" ? `Room ID: ${roomId}` : "Solo Play"}</span></div>
+      <div className="top-bar">
+        <span>{gameMode === "online" ? `ルームID: ${roomId}` : "CPU戦"}</span>
+        {gameMode === "online" && (
+            <button className="copy-url-btn" onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                alert("招待URLをコピーしました！");
+            }}>URLをコピー</button>
+        )}
+      </div>
       
       {gameStatus === "waiting" ? (
         <div className="start-screen centered">
+          <div className="player-wait-list">
+             <h3>待機中のプレイヤー</h3>
+             {gameMode === "online" ? (
+                 Object.values(players).map((p,idx) => <div key={idx} className="wait-p-name">🍲 {p.name}</div>)
+             ) : (
+                 <div className="wait-p-name">🍲 あなた</div>
+             )}
+          </div>
           <button onClick={startAction} className="mega-button">ゲーム開始</button>
         </div>
       ) : (
         <div className="playing-field">
-          {/* 上(CPU 2) */}
+          {/* 上(CPU 2 / Player 2) */}
           <div className="table-row">
             <div className={`player-info-box ${(turn === (mIdx + 2) % 4) ? 'active' : ''}`}>
-              <div className="p-name-tag">{gameMode === "online" ? (players[pIds[(mIdx+2)%4]]?.name || "CPU 2") : "CPU 2"}</div>
+              <div className="p-name-tag">{gameMode === "online" ? (players[pIds[(mIdx+2)%4]]?.name || "待機中...") : "CPU 2"}</div>
             </div>
           </div>
 
           <div className="center-board-wrapper">
              <div className={`player-info-box side left-side ${(turn === (mIdx + 1) % 4) ? 'active' : ''}`}>
-               <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+1)%4]]?.name || "CPU 1") : "CPU 1"}</div>
+               <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+1)%4]]?.name || "待機中...") : "CPU 1"}</div>
              </div>
 
              <div className="cross-grid">
@@ -299,7 +338,7 @@ function App() {
              </div>
 
              <div className={`player-info-box side right-side ${(turn === (mIdx + 3) % 4) ? 'active' : ''}`}>
-               <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "CPU 3") : "CPU 3"}</div>
+               <div className="p-name-tag vertical">{gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "待機中...") : "CPU 3"}</div>
              </div>
           </div>
 
