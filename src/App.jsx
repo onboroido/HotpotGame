@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 import { db } from './firebase'; 
 import { ref, onValue, set, update, push, onDisconnect } from "firebase/database";
@@ -30,13 +30,12 @@ function App() {
   const [slots, setSlots] = useState([null, null, null, null]);
   const [turn, setTurn] = useState(0);
   const [round, setRound] = useState(1);
+  const [gameLog, setGameLog] = useState("準備中...");
   const [hasDrawn, setHasDrawn] = useState(false);
+  const [lastWinDetails, setLastWinDetails] = useState(null);
   const [hand, setHand] = useState([]); 
   const [totalScore, setTotalScore] = useState(0);
   const [showFinalResult, setShowFinalResult] = useState(false);
-  
-  // CPUの二重動作防止用
-  const isProcessingRef = useRef(false);
 
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
@@ -82,73 +81,60 @@ function App() {
     const pIds = Object.keys(players);
     const updates = {};
     pIds.forEach(id => {
-      const scoreData = calculateScore(players[id].hand || [], id === winnerId);
+      const isWinner = (id === winnerId);
+      const scoreData = calculateScore(players[id].hand || [], isWinner);
       updates[`players/${id}/score`] = (players[id].score || 0) + scoreData.total;
     });
     updates.status = "finished";
+    const winHand = winnerId ? (players[winnerId].hand || []) : [];
+    updates.lastWinDetails = calculateScore(winHand, true); 
     update(ref(db, `rooms/${roomId}`), updates);
   };
 
-  // --- CPU思考ロジック改良版 ---
+  // --- CPU思考 ---
   useEffect(() => {
-    if (gameStatus !== "playing" || isProcessingRef.current) return;
-
+    if (gameStatus !== "playing") return;
     const runCpuTurn = async () => {
-      const pIds = Object.keys(players);
-      if (pIds.length === 0) return;
-      
-      const currentPlayerId = pIds[turn];
-      const isCpu = gameMode === "cpu" ? (turn !== 0) : (myId === pIds[0] && players[currentPlayerId]?.isCpu);
-
-      if (!isCpu) return;
-
-      isProcessingRef.current = true;
-      await new Promise(r => setTimeout(r, 1000));
-
-      if (gameMode === "online") {
-        const roomRef = ref(db, `rooms/${roomId}`);
+      if (gameMode === "cpu" && turn !== 0) {
         if (!hasDrawn) {
-          const newDeck = [...deck];
-          if (newDeck.length === 0) {
-            update(roomRef, { status: "finished" });
-            isProcessingRef.current = false;
-            return;
-          }
-          const picked = newDeck.pop();
-          const cpuHand = sortHand([...(players[currentPlayerId].hand || []), picked]);
-          
-          if (checkWin(cpuHand)) {
-            await update(roomRef, { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand });
-            finalizeGameScores(currentPlayerId);
-          } else {
-            await update(roomRef, { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand, hasDrawn: true });
-          }
-        } else {
-          const cpuHand = [...(players[currentPlayerId].hand || [])];
-          const discarded = cpuHand.splice(Math.floor(Math.random() * cpuHand.length), 1)[0];
-          await update(roomRef, {
-            [`players/${currentPlayerId}/hand`]: sortHand(cpuHand),
-            [`slots/${turn}`]: discarded,
-            turn: (turn + 1) % 4,
-            hasDrawn: false
-          });
-        }
-      } else {
-        // CPU戦モード
-        if (!hasDrawn) {
+          await new Promise(r => setTimeout(r, 1000));
           const newDeck = [...deck];
           const picked = newDeck.pop();
           setDeck(newDeck);
           setHasDrawn(true);
         } else {
+          await new Promise(r => setTimeout(r, 1000));
           const ns = [...slots];
-          ns[turn] = deck[deck.length - 1] || CARD_TYPES[0];
+          const cpuDiscard = deck[deck.length - 1] || CARD_TYPES[0]; 
+          ns[turn] = cpuDiscard; 
           setSlots(ns);
           setHasDrawn(false);
           setTurn((turn + 1) % 4);
         }
       }
-      isProcessingRef.current = false;
+      if (gameMode === "online") {
+        const pIds = Object.keys(players);
+        const currentPlayerId = pIds[turn];
+        if (!myId || myId !== pIds[0] || !players[currentPlayerId]?.isCpu) return;
+        const roomRef = ref(db, `rooms/${roomId}`);
+        if (!hasDrawn) {
+          await new Promise(r => setTimeout(r, 1200));
+          const newDeck = [...deck];
+          if (newDeck.length === 0) return;
+          const picked = newDeck.pop();
+          const cpuHand = sortHand([...(players[currentPlayerId].hand || []), picked]);
+          if (checkWin(cpuHand)) {
+            update(roomRef, { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand }).then(() => finalizeGameScores(currentPlayerId));
+            return;
+          }
+          update(roomRef, { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand, hasDrawn: true });
+        } else {
+          await new Promise(r => setTimeout(r, 1200));
+          const cpuHand = [...(players[currentPlayerId].hand || [])];
+          const discarded = cpuHand.splice(Math.floor(Math.random() * cpuHand.length), 1)[0];
+          update(roomRef, { [`players/${currentPlayerId}/hand`]: sortHand(cpuHand), [`slots/${turn}`]: discarded, turn: (turn + 1) % 4, hasDrawn: false });
+        }
+      }
     };
     runCpuTurn();
   }, [turn, hasDrawn, gameStatus, gameMode, deck, players, roomId, myId]);
@@ -156,7 +142,6 @@ function App() {
   // --- ゲーム管理 ---
   const startAction = useCallback(async (resetGame = false) => {
     setShowFinalResult(false);
-    isProcessingRef.current = false;
     const fullDeck = [];
     CARD_TYPES.forEach(type => { for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()}); });
     fullDeck.sort(() => Math.random() - 0.5);
@@ -181,6 +166,7 @@ function App() {
       updates.slots = [null, null, null, null];
       updates.turn = 0;
       updates.hasDrawn = false;
+      updates.lastWinDetails = null;
       await update(ref(db, `rooms/${roomId}`), updates);
     } else {
       if (resetGame) setTotalScore(0);
@@ -191,6 +177,7 @@ function App() {
       setGameStatus("playing");
       setTurn(0);
       setHasDrawn(false);
+      setLastWinDetails(null);
     }
   }, [gameMode, round, players, roomId]);
 
@@ -206,9 +193,11 @@ function App() {
       setTurn(d.turn || 0);
       setRound(d.round || 1);
       setHasDrawn(d.hasDrawn || false);
+      if (d.lastWinDetails) setLastWinDetails(d.lastWinDetails);
     });
   }, [gameMode, roomId]);
 
+  // --- アクション ---
   const drawAction = () => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
@@ -222,7 +211,7 @@ function App() {
         update(ref(db, `rooms/${roomId}`), { [`players/${myId}/hand`]: newHand }).then(() => finalizeGameScores(myId));
       } else {
         setHand(newHand); setTotalScore(s => s + calculateScore(newHand, true).total);
-        setGameStatus("finished");
+        setGameStatus("finished"); setLastWinDetails(calculateScore(newHand, true));
       }
       return;
     }
@@ -245,20 +234,20 @@ function App() {
     }
   };
 
-  const pickFromSlotAction = (slotIdx) => {
+  const pickFromSlotAction = (idx) => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
-    if (turn !== mIdx || hasDrawn || !slots[slotIdx]) return;
-    const picked = slots[slotIdx];
-    const ns = [...slots]; ns[slotIdx] = null;
+    if (turn !== mIdx || hasDrawn || !slots[idx]) return;
+    const picked = slots[idx];
+    const ns = [...slots]; ns[idx] = null;
     const curH = gameMode === "online" ? (players[myId]?.hand || []) : hand;
-    const newHand = sortHand([...(curH || []), picked]);
+    const newHand = sortHand([...curH, picked]);
     if (checkWin(newHand)) {
       if (gameMode === "online") {
         update(ref(db, `rooms/${roomId}`), { slots: ns, [`players/${myId}/hand`]: newHand }).then(() => finalizeGameScores(myId));
       } else {
         setHand(newHand); setSlots(ns); setTotalScore(s => s + calculateScore(newHand, true).total);
-        setGameStatus("finished");
+        setGameStatus("finished"); setLastWinDetails(calculateScore(newHand, true));
       }
       return;
     }
@@ -301,15 +290,15 @@ function App() {
         <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} className="name-input-large" placeholder="名前を入力" />
         <button onClick={async () => {
           if (!playerName.trim()) return;
-          try {
-            const pRef = push(ref(db, `rooms/${roomId}/players`));
-            setMyId(pRef.key); await set(pRef, { name: playerName, hand: [], score: 0 });
-            onDisconnect(pRef).remove(); setIsJoined(true);
-          } catch(e) { alert("入室に失敗しました。接続を確認してください。"); }
+          const pRef = push(ref(db, `rooms/${roomId}/players`));
+          setMyId(pRef.key); await set(pRef, { name: playerName, hand: [], score: 0 });
+          onDisconnect(pRef).remove(); setIsJoined(true);
         }} className="mega-button">参加する</button>
       </div>
     </div>
   );
+
+  if (gameMode === "cpu" && gameStatus === "playing" && hand.length === 0) startAction(true);
 
   const pIds = Object.keys(players);
   const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
@@ -364,6 +353,7 @@ function App() {
         <div className="win-overlay">
           <div className="win-card">
             <h2 className="win-title">{checkWin(curHand) ? "いただきます！" : "ごちそうさま！"}</h2>
+            <p className="round-score-label">Round {round} Score</p>
             <div className="win-score-display"><span className="win-score-val">+{myRoundScore}</span><span className="win-score-unit">pt</span></div>
             {round < 3 ? (
               <button onClick={() => startAction(false)} className="mega-button">次のラウンドへ</button>

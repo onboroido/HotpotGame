@@ -126,6 +126,7 @@ body {
 
 .round-badge { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 8px 16px; border-radius: 8px; font-weight: bold; border: 1px solid var(--accent-gold); }
 
+/* 最終結果画面 */
 .final-bg { background: radial-gradient(circle, #2c3e50 0%, #000 100%); }
 .final-card { width: 80%; max-width: 600px; text-align: center; color: white; }
 .final-title { font-size: 3rem; color: var(--accent-gold); text-shadow: 0 0 20px rgba(241, 196, 15, 0.5); margin-bottom: 40px; }
@@ -140,7 +141,13 @@ body {
 .rank-name { flex: 1; text-align: left; margin-left: 20px; }
 .rank-score { font-weight: bold; }
 
-.final-actions { display: flex; flex-direction: column; gap: 15px; align-items: center; }
+/* 最終アクションボタン */
+.final-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  align-items: center;
+}
 .restart-btn { background: #27ae60; width: 300px; }
 .restart-btn:hover { background: #2ecc71; }
 .quit-btn { background: #7f8c8d; width: 300px; font-size: 0.9rem; padding: 10px 20px; }
