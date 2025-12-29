@@ -1,175 +1,64 @@
 :root {
-  --bg-color: #1a252f;
-  --accent-orange: #e67e22;
-  --active-gold: #f1c40f;
-  --card-width: 65px;
-  --card-height: 90px;
+  --bg: #1a252f;
+  --gold: #f1c40f;
+  --card-w: 60px;
+  --card-h: 85px;
 }
 
 @media (min-width: 1024px) {
-  :root {
-    --card-width: 80px;
-    --card-height: 110px;
-  }
+  :root { --card-w: 75px; --card-h: 105px; }
 }
 
-body { margin: 0; background: var(--bg-color); color: white; font-family: sans-serif; overflow: hidden; position: fixed; width: 100%; height: 100%; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; position: fixed; width: 100%; height: 100%; }
 
-.playing-field-wrapper {
-  display: flex;
-  flex-direction: row;
-  width: 100vw;
-  height: 100vh;
-  padding: 50px 10px 10px;
-  box-sizing: border-box;
-}
+.game-container { width: 100vw; height: 100vh; display: flex; flex-direction: column; position: relative; }
+.round-badge { position: absolute; top: 10px; left: 10px; background: #000; padding: 5px 10px; border-radius: 5px; z-index: 100; font-weight: bold; }
 
-.playing-field {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-width: 0;
-}
+/* レイアウトのコア */
+.playing-wrapper { display: flex; flex: 1; height: 100%; overflow: hidden; }
+.main-area { flex: 1; display: flex; flex-direction: column; padding: 40px 10px 10px; min-width: 0; }
 
-/* スマホ時：ランキングを画面下に横並びで配置 */
 @media (max-width: 768px) {
-  .playing-field-wrapper {
-    flex-direction: column;
-    padding: 45px 5px 5px;
-  }
-  .ranking-side-panel {
-    max-width: 100% !important;
-    margin-left: 0 !important;
-    flex-direction: row !important;
-    height: 70px;
-    border-left: none !important;
-    border-top: 1px solid rgba(255,255,255,0.1);
-    padding: 10px 5px !important;
-    background: rgba(0,0,0,0.6) !important;
-  }
-  .ranking-list {
-    flex-direction: row !important;
-    overflow-x: auto;
-    width: 100%;
-    gap: 8px;
-    justify-content: center;
-  }
-  .ranking-item {
-    padding: 5px 12px !important;
-    font-size: 11px !important;
-    white-space: nowrap;
-    min-width: 80px;
-  }
-  .ranking-title { display: none; }
+  .playing-wrapper { flex-direction: column; }
+  .rank-panel { width: 100% !important; height: 60px !important; order: 2; border-left: none !important; border-top: 1px solid #333; }
+  .rank-list { flex-direction: row !important; overflow-x: auto; }
+  .main-area { flex: 1; order: 1; }
 }
 
-/* 左右のCPUを確実に端へ配置 */
-.middle-row {
-  display: grid;
-  grid-template-columns: 80px 1fr 80px;
-  align-items: center;
-  flex: 1;
-  width: 100%;
-}
+.row { display: flex; justify-content: center; align-items: center; }
+.row.top { height: 50px; }
+.row.middle { flex: 1; display: grid; grid-template-columns: 80px 1fr 80px; width: 100%; }
+.row.bottom { flex-direction: column; padding-bottom: 10px; }
 
-.side-player-container.left { justify-content: flex-start; }
-.side-player-container.right { justify-content: flex-end; }
+.side-container.left { justify-content: flex-start; }
+.side-container.right { justify-content: flex-end; }
 
-.player-info-box {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 6px 12px;
-  border-radius: 15px;
-  font-size: 12px;
-  border: 2px solid transparent;
-  white-space: nowrap;
-  font-weight: bold;
-}
+.p-box { background: rgba(255,255,255,0.1); padding: 5px 10px; border-radius: 10px; font-size: 12px; }
 
-.player-info-box.active {
-  border-color: var(--active-gold);
-  background: rgba(241, 196, 15, 0.2);
-  box-shadow: 0 0 10px var(--active-gold);
-}
-
-/* ボード中央 */
+/* ボード */
 .board-center { display: flex; justify-content: center; align-items: center; }
-.slots-grid { 
-  display: grid; 
-  grid-template-areas: ". top ." "left deck right" ". bottom ."; 
-  gap: 8px;
-  transform: scale(0.9);
-}
+.slots-grid { display: grid; grid-template-areas: ". t ." "l d r" ". b ."; gap: 10px; }
+.slot.t { grid-area: t; } .slot.l { grid-area: l; } .slot.r { grid-area: r; } .slot.b { grid-area: b; }
+.deck { grid-area: d; width: var(--card-w); height: var(--card-h); background: #5d4037; border: 2px solid #fff; border-radius: 5px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.deck.active { border-color: var(--gold); box-shadow: 0 0 10px var(--gold); }
+.slot { width: var(--card-w); height: var(--card-h); border: 1px dashed #555; border-radius: 5px; }
 
-.top-slot { grid-area: top; }
-.left-slot { grid-area: left; }
-.right-slot { grid-area: right; }
-.bottom-slot { grid-area: bottom; }
-.deck-pile { 
-  grid-area: deck; 
-  width: var(--card-width); 
-  height: var(--card-height); 
-  background: #5d4037; 
-  border-radius: 8px; 
-  border: 3px solid white; 
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
-  font-weight: bold; 
-  cursor: pointer; 
-}
-.deck-pile.can-draw { border-color: var(--active-gold); animation: pulse 1.5s infinite; }
-.slot { width: var(--card-width); height: var(--card-height); border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.2); }
+/* ランキング */
+.rank-panel { width: 160px; background: rgba(0,0,0,0.3); border-left: 1px solid #333; padding: 10px; }
+.rank-list { display: flex; flex-direction: column; gap: 5px; }
+.rank-item { font-size: 11px; padding: 5px; background: rgba(255,255,255,0.05); border-radius: 4px; }
+.rank-item.me { border: 1px solid var(--gold); color: var(--gold); }
 
-/* PC時のランキングパネル */
-.ranking-side-panel {
-  flex: none;
-  width: 180px;
-  background: rgba(0, 0, 0, 0.4);
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
-  margin-left: 10px;
-  padding: 15px;
-  display: flex;
-  flex-direction: column;
-}
+/* カード & 手札 */
+.hand { display: flex; gap: 4px; overflow-x: auto; padding: 10px; max-width: 100%; }
+.card { width: var(--card-w); height: var(--card-h); background: #fff; border-radius: 5px; border: 2px solid var(--card-color); flex-shrink: 0; cursor: pointer; }
+.card-inner { height: 100%; display: flex; flex-direction: column; align-items: center; padding: 4px; color: #333; }
+.card-icon { font-size: 24px; margin-top: 5px; }
+.card-name { font-size: 10px; margin-top: auto; font-weight: bold; }
+.card-category-tag { font-size: 8px; color: #fff; padding: 2px; border-radius: 2px; width: 100%; text-align: center; }
 
-.ranking-title { font-size: 14px; color: var(--active-gold); text-align: center; margin-bottom: 15px; }
-.ranking-list { display: flex; flex-direction: column; gap: 8px; }
-.ranking-item { display: flex; align-items: center; padding: 8px; background: rgba(255, 255, 255, 0.05); border-radius: 6px; font-size: 13px; }
-.ranking-item.is-me { background: rgba(241, 196, 15, 0.2); border: 1px solid var(--active-gold); }
-.rank-num { font-weight: bold; width: 20px; color: var(--active-gold); }
-.rank-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rank-score { font-weight: bold; }
-
-/* 手札 */
-.hand-display { 
-  display: flex !important; 
-  flex-direction: row !important; 
-  gap: 5px; 
-  padding: 10px; 
-  background: rgba(0,0,0,0.3); 
-  border-radius: 15px; 
-  justify-content: center; 
-  overflow-x: auto;
-  max-width: 100vw;
-}
-.hand-display.my-turn { border: 2px solid var(--active-gold); }
-
-/* カード */
-.card { width: var(--card-width); height: var(--card-height); background: white; border-radius: 6px; color: #333; position: relative; border: 2px solid var(--card-color); flex-shrink: 0; }
-.card-inner { padding: 4px; display: flex; flex-direction: column; align-items: center; height: 100%; box-sizing: border-box; }
-.card-category-tag { font-size: 8px; color: white; padding: 2px 4px; border-radius: 3px; align-self: flex-start; }
-.card-icon { font-size: 26px; margin: 4px 0; }
-.card-name { font-size: 10px; font-weight: bold; margin-top: auto; }
-
-/* ROUND バッジ */
-.round-badge-top-left { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); padding: 5px 12px; border-radius: 8px; border-left: 3px solid var(--active-gold); z-index: 100; }
-.badge-label { font-size: 9px; color: #aaa; display: block; }
-.badge-value { font-size: 16px; font-weight: bold; }
-
-.log-text { font-size: 1rem; color: var(--active-gold); margin-bottom: 5px; }
-
-@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
-.win-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.win-card { background: white; color: #333; padding: 30px; border-radius: 20px; text-align: center; border: 6px solid var(--active-gold); }
-.mega-button { padding: 10px 25px; background: var(--accent-orange); border: none; border-radius: 50px; color: white; font-weight: bold; cursor: pointer; }
+.log { color: var(--gold); font-size: 12px; margin-bottom: 5px; }
+.mega-button { padding: 10px 20px; background: #e67e22; border: none; border-radius: 20px; color: #fff; font-weight: bold; cursor: pointer; }
+.win-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.win-card { background: #fff; color: #333; padding: 30px; border-radius: 20px; text-align: center; }

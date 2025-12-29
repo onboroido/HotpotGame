@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import './App.css'
 import { db } from './firebase'; 
 import { ref, onValue, set, update, push, onDisconnect } from "firebase/database";
@@ -34,7 +34,6 @@ function App() {
   const [hasDrawn, setHasDrawn] = useState(false);
   const [lastWinDetails, setLastWinDetails] = useState({ total: 0 });
   const [hand, setHand] = useState([]); 
-  const [cpuHands, setCpuHands] = useState([[], [], []]);
   const [totalScore, setTotalScore] = useState(0);
 
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
@@ -79,35 +78,22 @@ function App() {
   };
 
   const getRanking = () => {
-    if (gameMode === "online") {
-      return Object.keys(players).map(id => ({
-        name: players[id].name,
-        score: players[id].score || 0,
-        isMe: id === myId
-      })).sort((a, b) => b.score - a.score);
-    } else {
-      return [
-        { name: "あなた", score: totalScore, isMe: true },
-        { name: "CPU 1", score: 0, isMe: false },
-        { name: "CPU 2", score: 0, isMe: false },
-        { name: "CPU 3", score: 0, isMe: false },
-      ].sort((a, b) => b.score - a.score);
-    }
+    const list = gameMode === "online" 
+      ? Object.keys(players).map(id => ({ name: players[id].name, score: players[id].score || 0, isMe: id === myId }))
+      : [{ name: "あなた", score: totalScore, isMe: true }, { name: "CPU 1", score: 0, isMe: false }, { name: "CPU 2", score: 0, isMe: false }, { name: "CPU 3", score: 0, isMe: false }];
+    return list.sort((a, b) => b.score - a.score);
   };
 
-  const startAction = useCallback((resetGame = false, forceMode = null) => {
-    const mode = forceMode || gameMode;
+  const startAction = useCallback((resetGame = false) => {
     const fullDeck = [];
-    CARD_TYPES.forEach(type => {
-      for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()});
-    });
+    CARD_TYPES.forEach(type => { for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()}); });
     fullDeck.sort(() => Math.random() - 0.5);
     const nextRound = resetGame ? 1 : round + 1;
-    if (resetGame) setTotalScore(0);
-    if (mode === "cpu") {
+
+    if (gameMode === "cpu") {
+      setTotalScore(resetGame ? 0 : totalScore);
       setRound(nextRound);
       setHand(sortHand(fullDeck.splice(0, 8)));
-      setCpuHands([fullDeck.splice(0, 8), fullDeck.splice(0, 8), fullDeck.splice(0, 8)]);
       setDeck(fullDeck);
       setSlots([null, null, null, null]);
       setGameStatus("playing");
@@ -115,10 +101,9 @@ function App() {
       setHasDrawn(false);
       setGameLog(`第${nextRound}ラウンド開始！`);
     } else {
-      const playerIds = Object.keys(players);
-      if (playerIds.length === 0) return;
+      const pIds = Object.keys(players);
       const updates = {};
-      playerIds.forEach(id => { 
+      pIds.forEach(id => { 
         updates[`players/${id}/hand`] = sortHand(fullDeck.splice(0, 8)); 
         if (resetGame) updates[`players/${id}/score`] = 0;
       });
@@ -131,64 +116,53 @@ function App() {
       updates['log'] = `第${nextRound}ラウンド開始！`;
       update(ref(db, `rooms/${roomId}`), updates);
     }
-  }, [gameMode, round, players, roomId]);
-
-  const selectMode = (mode) => {
-    setGameMode(mode);
-    if (mode === "cpu") startAction(true, "cpu");
-  };
+  }, [gameMode, round, players, roomId, totalScore]);
 
   useEffect(() => {
-    if (gameMode !== "online") return;
-    let currentRoomId = roomId || Math.random().toString(36).substring(2, 7);
-    if (!roomId) {
-      setRoomId(currentRoomId);
-      window.history.pushState({}, '', `?room=${currentRoomId}`);
-    }
-    const roomRef = ref(db, `rooms/${currentRoomId}`);
+    if (gameMode !== "online" || !roomId) return;
+    const roomRef = ref(db, `rooms/${roomId}`);
     return onValue(roomRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        setPlayers(data.players || {});
-        setGameStatus(data.status || "waiting");
-        setDeck(data.deck || []);
-        setSlots(data.slots || [null, null, null, null]);
-        setTurn(data.turn || 0);
-        setRound(data.round || 1);
-        setGameLog(data.log || "");
-        setHasDrawn(data.hasDrawn || false);
-        if (data.lastWinDetails) setLastWinDetails(data.lastWinDetails);
-      }
+      if (!data) return;
+      setPlayers(data.players || {});
+      setGameStatus(data.status || "waiting");
+      setDeck(data.deck || []);
+      setSlots(data.slots || [null, null, null, null]);
+      setTurn(data.turn || 0);
+      setRound(data.round || 1);
+      setGameLog(data.log || "");
+      setHasDrawn(data.hasDrawn || false);
+      if (data.lastWinDetails) setLastWinDetails(data.lastWinDetails);
     });
   }, [gameMode, roomId]);
 
   const drawAction = () => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
-    if (turn !== mIdx || hasDrawn || gameStatus !== "playing" || deck.length === 0) return;
+    if (turn !== mIdx || hasDrawn || gameStatus !== "playing") return;
     const newDeck = [...deck];
     const picked = newDeck.pop();
     const curH = gameMode === "online" ? players[myId].hand : hand;
     const newHand = sortHand([...(curH || []), picked]);
     if (gameMode === "cpu") {
       setHand(newHand); setDeck(newDeck); setHasDrawn(true);
-      if (checkWin(newHand)) setTimeout(() => finishRound(newHand, true, "あなた"), 1000);
+      if (checkWin(newHand)) finishRound(newHand, true, "あなた");
     } else {
       update(ref(db, `rooms/${roomId}`), { deck: newDeck, [`players/${myId}/hand`]: newHand, hasDrawn: true });
-      if (checkWin(newHand)) setTimeout(() => finishRound(newHand, true, playerName), 1000);
+      if (checkWin(newHand)) finishRound(newHand, true, playerName);
     }
   };
 
   const discardAction = (idx) => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
-    if (turn !== mIdx || !hasDrawn || gameStatus !== "playing") return;
+    if (turn !== mIdx || !hasDrawn) return;
     const curH = gameMode === "online" ? players[myId].hand : hand;
     const newHand = [...(curH || [])];
     const discarded = newHand.splice(idx, 1)[0];
     if (gameMode === "cpu") {
-      const newSlots = [...slots]; newSlots[0] = discarded;
-      setHand(sortHand(newHand)); setSlots(newSlots); setHasDrawn(false); setTurn(1);
+      const ns = [...slots]; ns[0] = discarded;
+      setHand(sortHand(newHand)); setSlots(ns); setHasDrawn(false); setTurn(1);
     } else {
       update(ref(db, `rooms/${roomId}`), { [`players/${myId}/hand`]: sortHand(newHand), [`slots/${mIdx}`]: discarded, turn: (turn + 1) % pIds.length, hasDrawn: false });
     }
@@ -197,80 +171,74 @@ function App() {
   const pickFromSlotAction = (idx) => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
-    if (turn !== mIdx || hasDrawn || !slots[idx] || gameStatus !== "playing") return;
+    if (turn !== mIdx || hasDrawn || !slots[idx]) return;
     const picked = slots[idx];
-    const newSlots = [...slots]; newSlots[idx] = null;
+    const ns = [...slots]; ns[idx] = null;
     const curH = gameMode === "online" ? players[myId].hand : hand;
     const newHand = sortHand([...(curH || []), picked]);
     if (gameMode === "cpu") {
-      setHand(newHand); setSlots(newSlots); setHasDrawn(true);
-      if (checkWin(newHand)) setTimeout(() => finishRound(newHand, true, "あなた"), 1000);
+      setHand(newHand); setSlots(ns); setHasDrawn(true);
+      if (checkWin(newHand)) finishRound(newHand, true, "あなた");
     } else {
-      update(ref(db, `rooms/${roomId}`), { slots: newSlots, [`players/${myId}/hand`]: newHand, hasDrawn: true });
+      update(ref(db, `rooms/${roomId}`), { slots: ns, [`players/${myId}/hand`]: newHand, hasDrawn: true });
     }
   };
 
-  const finishRound = (winningHand, isPlayerWinner, winnerName) => {
-    const scoreDetails = calculateScore(winningHand, isPlayerWinner);
-    if (isPlayerWinner) setTotalScore(prev => prev + scoreDetails.total);
+  const finishRound = (winH, isMe, wName) => {
+    const sd = calculateScore(winH, isMe);
     if (gameMode === "cpu") {
-      setGameStatus("finished");
-      setLastWinDetails(scoreDetails);
-      setGameLog(`${winnerName}の「いただきます！」`);
+      if (isMe) setTotalScore(s => s + sd.total);
+      setGameStatus("finished"); setLastWinDetails(sd); setGameLog(`${wName}の勝利！`);
     } else {
-      const updates = { status: "finished", lastWinDetails: scoreDetails, log: `${winnerName}の「いただきます！」` };
-      if (isPlayerWinner) updates[`players/${myId}/score`] = (players[myId]?.score || 0) + scoreDetails.total;
+      const updates = { status: "finished", lastWinDetails: sd, log: `${wName}の勝利！` };
+      if (isMe) updates[`players/${myId}/score`] = (players[myId]?.score || 0) + sd.total;
       update(ref(db, `rooms/${roomId}`), updates);
     }
   };
 
-  const CardDisplay = ({ card, onClick, className }) => {
-    if (!card) return null;
-    return (
+  const CardDisplay = ({ card, onClick, className }) => (
+    card ? (
       <div className={`card ${className || ""}`} style={{ '--card-color': card.color }} onClick={onClick}>
         <div className="card-inner">
           <div className="card-category-tag" style={{backgroundColor: card.color}}>{card.category}</div>
           <div className="card-icon">{card.icon}</div>
           <div className="card-name">{card.name}</div>
         </div>
-        {card.isCompleted && <div className="set-label">SET!</div>}
       </div>
-    );
-  };
+    ) : null
+  );
 
-  if (!gameMode) {
-    return (
-      <div className="game-container full-height menu-bg">
-        <div className="start-screen main-menu">
-          <h1 className="title-large">🍲 Hotpot Game</h1>
-          <div className="menu-buttons">
-            <button onClick={() => selectMode("cpu")} className="mega-button">CPUと対戦</button>
-            <button onClick={() => selectMode("online")} className="mega-button">オンライン対戦</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (gameMode === "online" && !isJoined) {
-    return (
-      <div className="game-container full-height">
-        <div className="start-screen">
-          <h2 className="section-title">プレイヤー登録</h2>
-          <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} className="name-input-large" placeholder="名前を入力" />
+  if (!gameMode) return (
+    <div className="game-container menu-bg">
+      <div className="start-screen main-menu">
+        <h1 className="title-large">🍲 Hotpot Game</h1>
+        <div className="menu-buttons">
+          <button onClick={() => {setGameMode("cpu"); startAction(true);}} className="mega-button">CPUと対戦</button>
           <button onClick={() => {
-            if (!playerName.trim()) return alert("名前を入力してください");
-            const playersRef = ref(db, `rooms/${roomId}/players`);
-            const newPlayerRef = push(playersRef);
-            setMyId(newPlayerRef.key);
-            set(newPlayerRef, { name: playerName, hand: [], score: 0 });
-            onDisconnect(newPlayerRef).remove();
-            setIsJoined(true);
-          }} className="mega-button">入室する</button>
+            setGameMode("online");
+            if(!roomId) { const r = Math.random().toString(36).substring(2,7); setRoomId(r); window.history.pushState({}, '', `?room=${r}`); }
+          }} className="mega-button">オンライン対戦</button>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+
+  if (gameMode === "online" && !isJoined) return (
+    <div className="game-container">
+      <div className="start-screen">
+        <h2 className="section-title">プレイヤー登録</h2>
+        <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} className="name-input-large" placeholder="名前を入力" />
+        <button onClick={() => {
+          if (!playerName.trim()) return;
+          const pRef = push(ref(db, `rooms/${roomId}/players`));
+          setMyId(pRef.key);
+          set(pRef, { name: playerName, hand: [], score: 0 });
+          onDisconnect(pRef).remove();
+          setIsJoined(true);
+        }} className="mega-button">入室する</button>
+      </div>
+    </div>
+  );
 
   const pIds = Object.keys(players);
   const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
@@ -278,99 +246,48 @@ function App() {
 
   return (
     <div className="game-container">
-      <div className="round-badge-top-left">
-        <span className="badge-label">ROUND</span>
-        <span className="badge-value">{round}/3</span>
-      </div>
-
+      <div className="round-badge">{round}/3</div>
       {gameStatus === "waiting" ? (
         <div className="start-screen centered">
-          <div className="waiting-status-card">
-            <h2>対戦待ち ({pIds.length}/4)</h2>
-            <div className="player-list-box">
-              {pIds.map(id => <div key={id} className="p-list-item">{players[id].name} {id===myId && "(あなた)"}</div>)}
-            </div>
-            <div className="invite-section">
-              <p>招待URL:</p>
-              <input type="text" readOnly value={getInviteUrl()} className="url-input" />
-              <button onClick={() => {navigator.clipboard.writeText(getInviteUrl()); alert("コピーしました！")}}>コピー</button>
-            </div>
+          <div className="waiting-card">
+            <h2>待機中 ({pIds.length}/4)</h2>
+            <div className="p-list">{pIds.map(id => <div key={id}>{players[id].name}</div>)}</div>
             <button onClick={() => startAction(true)} className="mega-button">ゲーム開始</button>
           </div>
         </div>
       ) : (
-        <div className="playing-field-wrapper">
-          <div className="playing-field">
-            <div className="top-player-row">
-              <div className={`player-info-box ${(turn === (mIdx + 2) % 4) ? 'active' : ''}`}>
-                {gameMode === "online" ? (players[pIds[(mIdx+2)%4]]?.name || "P3") : "CPU 2"}
-              </div>
-            </div>
-
-            <div className="middle-row">
-              <div className="side-player-container left">
-                <div className={`player-info-box side-player ${(turn === (mIdx + 1) % 4) ? 'active' : ''}`}>
-                  {gameMode === "online" ? (players[pIds[(mIdx+1)%4]]?.name || "P2") : "CPU 1"}
-                </div>
-              </div>
-
+        <div className="playing-wrapper">
+          <div className="main-area">
+            <div className="row top"><div className="p-box">{gameMode === "online" ? (players[pIds[(mIdx+2)%4]]?.name || "P3") : "CPU 2"}</div></div>
+            <div className="row middle">
+              <div className="side-container left"><div className="p-box">{gameMode === "online" ? (players[pIds[(mIdx+1)%4]]?.name || "P2") : "CPU 1"}</div></div>
               <div className="board-center">
                 <div className="slots-grid">
-                  <div className="slot top-slot" onClick={() => pickFromSlotAction((mIdx + 2) % 4)}><CardDisplay card={slots[(mIdx + 2) % 4]} /></div>
-                  <div className="slot left-slot" onClick={() => pickFromSlotAction((mIdx + 1) % 4)}><CardDisplay card={slots[(mIdx + 1) % 4]} /></div>
-                  <div className={`deck-pile ${(turn === mIdx && !hasDrawn) ? 'can-draw' : ''}`} onClick={drawAction}>山札</div>
-                  <div className="slot right-slot" onClick={() => pickFromSlotAction((mIdx + 3) % 4)}><CardDisplay card={slots[(mIdx + 3) % 4]} /></div>
-                  <div className="slot bottom-slot" onClick={() => pickFromSlotAction(mIdx)}><CardDisplay card={slots[mIdx]} /></div>
+                  <div className="slot t" onClick={()=>pickFromSlotAction((mIdx+2)%4)}><CardDisplay card={slots[(mIdx+2)%4]}/></div>
+                  <div className="slot l" onClick={()=>pickFromSlotAction((mIdx+1)%4)}><CardDisplay card={slots[(mIdx+1)%4]}/></div>
+                  <div className={`deck ${(!hasDrawn && turn===mIdx) ? 'active' : ''}`} onClick={drawAction}>山札</div>
+                  <div className="slot r" onClick={()=>pickFromSlotAction((mIdx+3)%4)}><CardDisplay card={slots[(mIdx+3)%4]}/></div>
+                  <div className="slot b" onClick={()=>pickFromSlotAction(mIdx)}><CardDisplay card={slots[mIdx]}/></div>
                 </div>
               </div>
-
-              <div className="side-player-container right">
-                <div className={`player-info-box side-player ${(turn === (mIdx + 3) % 4) ? 'active' : ''}`}>
-                  {gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "P4") : "CPU 3"}
-                </div>
-              </div>
+              <div className="side-container right"><div className="p-box">{gameMode === "online" ? (players[pIds[(mIdx+3)%4]]?.name || "P4") : "CPU 3"}</div></div>
             </div>
-
-            <div className="bottom-player-row">
-              <div className="log-text">{gameLog}</div>
-              <div className={`hand-display ${turn === mIdx ? 'my-turn' : ''}`}>
-                {getProcessedHand(curHand).map((c, i) => (
-                  <CardDisplay key={i} card={c} className={(turn === mIdx && hasDrawn) ? 'discardable' : ''} onClick={() => discardAction(i)} />
-                ))}
+            <div className="row bottom">
+              <div className="log">{gameLog}</div>
+              <div className="hand">
+                {getProcessedHand(curHand).map((c, i) => <CardDisplay key={i} card={c} className={hasDrawn && turn===mIdx ? 'active' : ''} onClick={()=>discardAction(i)}/>)}
               </div>
             </div>
           </div>
-
-          <div className="ranking-side-panel">
-            <h3 className="ranking-title">RANKING</h3>
-            <div className="ranking-list">
-              {getRanking().map((rank, index) => (
-                <div key={index} className={`ranking-item ${rank.isMe ? 'is-me' : ''}`}>
-                  <span className="rank-num">{index + 1}</span>
-                  <span className="rank-name">{rank.name}</span>
-                  <span className="rank-score">{rank.score}</span>
-                </div>
-              ))}
-            </div>
+          <div className="rank-panel">
+            <div className="rank-list">{getRanking().map((r, i) => <div key={i} className={`rank-item ${r.isMe?'me':''}`}>{i+1}. {r.name}: {r.score}pt</div>)}</div>
           </div>
         </div>
       )}
-
       {gameStatus === "finished" && (
-        <div className="win-overlay">
-          <div className="win-card">
-            <h2>いただきます！</h2>
-            <div className="score-big">{lastWinDetails.total} pt</div>
-            {round < 3 ? (
-              <button onClick={() => startAction(false)} className="mega-button">次のラウンドへ</button>
-            ) : (
-              <button onClick={() => startAction(true)} className="mega-button">もう一杯！</button>
-            )}
-          </div>
-        </div>
+        <div className="win-overlay"><div className="win-card"><h2>勝利！</h2><div className="score">{lastWinDetails.total}pt</div><button onClick={() => startAction(false)} className="mega-button">次へ</button></div></div>
       )}
     </div>
   );
 }
-
 export default App;
