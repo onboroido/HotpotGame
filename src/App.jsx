@@ -367,7 +367,7 @@ function App() {
       {showFinalResult && (
         <div className="win-overlay final-bg">
           <div className="final-card">
-            <h1 className="final-title">🏆 鍋将軍 決定 🏆</h1>
+            <h1 className="final-title">🏆 最終結果 🏆</h1>
             <div className="final-rank-list">
               {currentRank.map((r, i) => (
                 <div key={i} className={`final-rank-item rank-${i+1} ${r.isMe?'me':''}`}>
