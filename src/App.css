@@ -1,65 +1,272 @@
 :root {
-  --bg: #1a252f;
-  --gold: #f1c40f;
-  --card-w: 60px;
-  --card-h: 85px;
+  --primary-bg: #1a1c1e;
+  --accent-gold: #f1c40f;
+  --card-width: 85px;
+  --card-height: 120px;
 }
 
-@media (min-width: 1024px) {
-  :root { --card-w: 75px; --card-h: 105px; }
+body {
+  margin: 0;
+  font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+  background-color: var(--primary-bg);
+  color: white;
+  overflow: hidden;
 }
 
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; position: fixed; width: 100%; height: 100%; }
+.game-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
 
-.game-container { width: 100vw; height: 100vh; display: flex; flex-direction: column; position: relative; }
-.round-badge { position: absolute; top: 10px; left: 10px; background: #000; padding: 5px 10px; border-radius: 5px; z-index: 100; font-weight: bold; }
+/* メニュー背景 */
+.menu-bg {
+  background: linear-gradient(135deg, #2c3e50, #000);
+}
 
-.playing-wrapper { display: flex; flex: 1; height: 100%; overflow: hidden; }
-.main-area { flex: 1; display: flex; flex-direction: column; padding: 40px 10px 10px; min-width: 0; }
+/* 対戦中の緑テーブル背景 */
+.playing-bg {
+  background-color: #2d5a27;
+  background-image: 
+    radial-gradient(#3a7332 1px, transparent 1px),
+    linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px);
+  background-size: 30px 30px, 100px 100px, 100px 100px;
+  flex: 1;
+  display: flex;
+}
 
-@media (max-width: 768px) {
-  .playing-wrapper { flex-direction: column; }
-  .rank-panel { width: 100% !important; height: 60px !important; order: 2; border-left: none !important; border-top: 1px solid #333; padding: 5px !important; }
-  .rank-list { flex-direction: row !important; overflow-x: auto; gap: 10px; justify-content: center; }
-  .main-area { flex: 1; order: 1; }
-  .rank-title { display: none; }
+.playing-wrapper {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
 }
 
 .row { display: flex; justify-content: center; align-items: center; }
-.row.top { height: 50px; }
-.row.middle { flex: 1; display: grid; grid-template-columns: 80px 1fr 80px; width: 100%; }
-.row.bottom { flex-direction: column; padding-bottom: 10px; }
+.row.top { height: 15%; }
+.row.middle { height: 50%; gap: 20px; }
+.row.bottom { height: 35%; flex-direction: column; }
 
-.p-box { background: rgba(255,255,255,0.1); padding: 5px 10px; border-radius: 10px; font-size: 12px; border: 2px solid transparent; }
-.p-box.active { border-color: var(--gold); background: rgba(241, 196, 15, 0.2); }
+.p-box {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 8px 20px;
+  border-radius: 12px;
+  font-weight: bold;
+  border: 2px solid transparent;
+  transition: all 0.3s;
+}
 
-.board-center { display: flex; justify-content: center; align-items: center; }
-.slots-grid { display: grid; grid-template-areas: ". t ." "l d r" ". b ."; gap: 10px; transform: scale(0.9); }
-.slot.t { grid-area: t; } .slot.l { grid-area: l; } .slot.r { grid-area: r; } .slot.b { grid-area: b; }
-.deck { grid-area: d; width: var(--card-w); height: var(--card-h); background: #5d4037; border: 2px solid #fff; border-radius: 5px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold; font-size: 12px; }
-.deck.can-draw { border-color: var(--gold); box-shadow: 0 0 10px var(--gold); }
-.slot { width: var(--card-w); height: var(--card-h); border: 1px dashed #555; border-radius: 5px; }
+.p-box.active {
+  background: var(--accent-gold);
+  color: black;
+  transform: scale(1.1);
+  box-shadow: 0 0 15px var(--accent-gold);
+}
 
-.rank-panel { width: 160px; background: rgba(0,0,0,0.3); border-left: 1px solid #333; padding: 15px 10px; }
-.rank-title { font-size: 12px; color: var(--gold); text-align: center; margin-bottom: 10px; font-weight: bold; }
-.rank-list { display: flex; flex-direction: column; gap: 5px; }
-.rank-item { font-size: 11px; padding: 6px; background: rgba(255,255,255,0.05); border-radius: 4px; display: flex; justify-content: space-between; }
-.rank-item.me { border: 1px solid var(--gold); color: var(--gold); background: rgba(241, 196, 15, 0.1); }
+/* ボードセンター */
+.board-center {
+  width: 400px;
+  height: 400px;
+  position: relative;
+}
 
-.hand { display: flex; gap: 4px; overflow-x: auto; padding: 10px; max-width: 100%; border: 2px solid transparent; border-radius: 10px; }
-.hand.my-turn { border-color: rgba(241, 196, 15, 0.3); }
-.card { width: var(--card-w); height: var(--card-h); background: #fff; border-radius: 5px; border: 2px solid var(--card-color); flex-shrink: 0; cursor: pointer; }
-.card-inner { height: 100%; display: flex; flex-direction: column; align-items: center; padding: 4px; color: #333; position: relative; }
-.card-icon { font-size: 24px; margin-top: 5px; }
-.card-name { font-size: 10px; margin-top: auto; font-weight: bold; }
-.card-category-tag { font-size: 8px; color: #fff; padding: 2px; border-radius: 2px; width: 100%; text-align: center; }
+.slots-grid {
+  display: grid;
+  grid-template-areas: 
+    ". t ."
+    "l d r"
+    ". b .";
+  gap: 15px;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+}
 
-.room-id-display { font-size: 14px; color: var(--gold); margin-bottom: 10px; }
-.invite-box { margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; font-size: 12px; }
-.url-input { width: 100%; padding: 5px; margin: 5px 0; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; }
+.slot {
+  width: var(--card-width);
+  height: var(--card-height);
+  border: 2px dashed rgba(255,255,255,0.3);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
-.log { color: var(--gold); font-size: 14px; margin-bottom: 8px; height: 20px; font-weight: bold; }
-.mega-button { padding: 12px 24px; background: #e67e22; border: none; border-radius: 25px; color: #fff; font-weight: bold; cursor: pointer; }
-.win-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.win-card { background: #fff; color: #333; padding: 40px; border-radius: 25px; text-align: center; border: 5px solid var(--gold); }
+.slot.t { grid-area: t; }
+.slot.l { grid-area: l; }
+.slot.r { grid-area: r; }
+.slot.b { grid-area: b; }
+
+.deck {
+  grid-area: d;
+  width: var(--card-width);
+  height: var(--card-height);
+  background: #5d4037;
+  border: 3px solid #3e2723;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+}
+
+.deck.can-draw {
+  animation: pulse 1.5s infinite;
+  border-color: var(--accent-gold);
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(241, 196, 15, 0.7); }
+  70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(241, 196, 15, 0); }
+  100% { transform: scale(1); }
+}
+
+/* カードスタイル */
+.card {
+  width: var(--card-width);
+  height: var(--card-height);
+  background: white;
+  border-radius: 8px;
+  color: #333;
+  position: relative;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  transition: transform 0.2s;
+}
+
+.card:hover { transform: translateY(-10px); }
+.card.active { border: 3px solid var(--accent-gold); }
+
+.card-inner {
+  padding: 6px;
+  height: calc(100% - 12px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.card-category-tag {
+  font-size: 10px;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-bottom: 5px;
+  width: 80%;
+  text-align: center;
+}
+
+.card-icon { font-size: 32px; margin: 10px 0; }
+.card-name { font-size: 12px; font-weight: bold; text-align: center; }
+
+/* 手札 */
+.hand {
+  display: flex;
+  gap: 8px;
+  padding: 15px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 15px;
+  border: 2px solid rgba(255,255,255,0.1);
+  min-height: 140px;
+}
+
+.hand.my-turn { border-color: var(--accent-gold); }
+
+/* ランキングパネル */
+.rank-panel {
+  width: 250px;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(5px);
+  border-left: 1px solid rgba(255,255,255,0.1);
+  padding: 20px;
+}
+
+.rank-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--accent-gold);
+  border-bottom: 2px solid var(--accent-gold);
+  margin-bottom: 15px;
+}
+
+.rank-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.rank-item.me { color: var(--accent-gold); font-weight: bold; }
+
+/* ログ */
+.log {
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--accent-gold);
+  padding: 8px 24px;
+  border-radius: 20px;
+  margin-bottom: 15px;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+/* 各種オーバーレイ */
+.win-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.win-card {
+  background: #fff;
+  color: #333;
+  padding: 40px;
+  border-radius: 20px;
+  text-align: center;
+  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.mega-button {
+  background: #e67e22;
+  color: white;
+  border: none;
+  padding: 15px 40px;
+  font-size: 1.2rem;
+  border-radius: 30px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: 0.3s;
+}
+
+.mega-button:hover { transform: scale(1.05); background: #d35400; }
+
+.round-badge {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: rgba(0,0,0,0.8);
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 24px;
+  font-weight: bold;
+  border: 1px solid var(--accent-gold);
+}

@@ -75,15 +75,13 @@ function App() {
     return { total };
   };
 
-  // --- CPU思考ロジック (CPUモード & オンライン共通) ---
+  // --- CPU思考ロジック ---
   useEffect(() => {
     if (gameStatus !== "playing") return;
 
     const runCpuTurn = async () => {
-      // 1. CPUモード（一人練習）の場合
       if (gameMode === "cpu" && turn !== 0) {
         setGameLog(`CPU ${turn} が考え中...`);
-        
         if (!hasDrawn) {
           await new Promise(r => setTimeout(r, 1000));
           const newDeck = [...deck];
@@ -93,22 +91,18 @@ function App() {
         } else {
           await new Promise(r => setTimeout(r, 1000));
           const ns = [...slots];
-          // 山札から引いた最新のカードを場に捨てる
           const cpuDiscard = deck[deck.length - 1] || CARD_TYPES[0]; 
           ns[turn] = cpuDiscard; 
-          
           setSlots(ns);
           setHasDrawn(false);
           setTurn((turn + 1) % 4);
         }
       }
 
-      // 2. オンライン対戦の場合
       if (gameMode === "online") {
         const pIds = Object.keys(players);
         const currentPlayerId = pIds[turn];
         const isHost = myId === pIds[0];
-
         if (!isHost || !players[currentPlayerId]?.isCpu) return;
 
         const roomRef = ref(db, `rooms/${roomId}`);
@@ -118,12 +112,7 @@ function App() {
           const picked = newDeck.pop();
           const cpuHand = sortHand([...(players[currentPlayerId].hand || []), picked]);
           const win = checkWin(cpuHand);
-          
-          const updates = { 
-            deck: newDeck, 
-            [`players/${currentPlayerId}/hand`]: cpuHand, 
-            hasDrawn: true 
-          };
+          const updates = { deck: newDeck, [`players/${currentPlayerId}/hand`]: cpuHand, hasDrawn: true };
           if (win) {
             updates.status = "finished";
             updates.log = `${players[currentPlayerId].name}の勝利！`;
@@ -135,7 +124,6 @@ function App() {
           const cpuHand = [...(players[currentPlayerId].hand || [])];
           const discardIdx = Math.floor(Math.random() * cpuHand.length);
           const discarded = cpuHand.splice(discardIdx, 1)[0];
-          
           update(roomRef, {
             [`players/${currentPlayerId}/hand`]: sortHand(cpuHand),
             [`slots/${turn}`]: discarded,
@@ -145,11 +133,9 @@ function App() {
         }
       }
     };
-
     runCpuTurn();
   }, [turn, hasDrawn, gameStatus, gameMode, deck, players, roomId, myId, slots]);
 
-  // --- ゲーム管理 ---
   const startAction = useCallback(async (resetGame = false) => {
     const fullDeck = [];
     CARD_TYPES.forEach(type => { for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()}); });
@@ -210,17 +196,14 @@ function App() {
     });
   }, [gameMode, roomId]);
 
-  // --- プレイヤーアクション ---
   const drawAction = () => {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
     if (turn !== mIdx || hasDrawn || gameStatus !== "playing") return;
-
     const newDeck = [...deck];
     const picked = newDeck.pop();
     const curH = gameMode === "online" ? players[myId].hand : hand;
     const newHand = sortHand([...(curH || []), picked]);
-
     if (gameMode === "online") {
       const updates = { deck: newDeck, [`players/${myId}/hand`]: newHand, hasDrawn: true };
       if (checkWin(newHand)) {
@@ -244,11 +227,9 @@ function App() {
     const pIds = Object.keys(players);
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
     if (turn !== mIdx || !hasDrawn) return;
-
     const curH = gameMode === "online" ? players[myId].hand : hand;
     const newHand = [...(curH || [])];
     const discarded = newHand.splice(idx, 1)[0];
-
     if (gameMode === "online") {
       update(ref(db, `rooms/${roomId}`), {
         [`players/${myId}/hand`]: sortHand(newHand),
@@ -289,7 +270,6 @@ function App() {
     ) : null
   );
 
-  // --- レンダリング ---
   if (!gameMode) return (
     <div className="game-container menu-bg">
       <div className="start-screen main-menu">
@@ -352,7 +332,7 @@ function App() {
           </div>
         </div>
       ) : (
-        <div className="playing-wrapper">
+        <div className="playing-wrapper playing-bg">
           <div className="main-area">
             <div className="row top"><div className={`p-box ${(turn === (mIdx+2)%4) ? 'active' : ''}`}>{gameMode === "online" ? (players[pIds[(mIdx+2)%4]]?.name || "CPU 2") : "CPU 2"}</div></div>
             <div className="row middle">
