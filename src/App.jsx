@@ -96,7 +96,6 @@ function App() {
     if (gameStatus !== "playing") return;
     const runCpuTurn = async () => {
       if (gameMode === "cpu" && turn !== 0) {
-        setGameLog(`CPU ${turn} が考え中...`);
         if (!hasDrawn) {
           await new Promise(r => setTimeout(r, 1000));
           const newDeck = [...deck];
@@ -142,7 +141,7 @@ function App() {
 
   // --- ゲーム管理 ---
   const startAction = useCallback(async (resetGame = false) => {
-    if (resetGame) setShowFinalResult(false);
+    setShowFinalResult(false);
     const fullDeck = [];
     CARD_TYPES.forEach(type => { for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()}); });
     fullDeck.sort(() => Math.random() - 0.5);
@@ -378,7 +377,10 @@ function App() {
                 </div>
               ))}
             </div>
-            <button onClick={() => { setGameMode(null); setGameStatus("waiting"); }} className="mega-button">タイトルへ戻る</button>
+            <div className="final-actions">
+              <button onClick={() => startAction(true)} className="mega-button restart-btn">もう一杯！ (リスタート)</button>
+              <button onClick={() => { setGameMode(null); setGameStatus("waiting"); window.location.search = ""; }} className="mega-button quit-btn">タイトルへ戻る</button>
+            </div>
           </div>
         </div>
       )}

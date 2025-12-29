@@ -120,7 +120,8 @@ body {
 .win-title { font-size: 40px; color: #e67e22; margin: 0; }
 .win-score-val { font-size: 60px; font-weight: bold; color: #c0392b; }
 
-.mega-button { background: #e67e22; color: white; border: none; padding: 15px 40px; font-size: 1.1rem; border-radius: 30px; cursor: pointer; font-weight: bold; }
+.mega-button { background: #e67e22; color: white; border: none; padding: 15px 40px; font-size: 1.1rem; border-radius: 30px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+.mega-button:hover { transform: scale(1.05); }
 .mega-button.primary { background: #2980b9; }
 
 .round-badge { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 8px 16px; border-radius: 8px; font-weight: bold; border: 1px solid var(--accent-gold); }
@@ -139,3 +140,14 @@ body {
 .rank-num { width: 50px; font-weight: 900; }
 .rank-name { flex: 1; text-align: left; margin-left: 20px; }
 .rank-score { font-weight: bold; }
+
+/* 最終アクションボタン */
+.final-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  align-items: center;
+}
+.restart-btn { background: #27ae60; width: 300px; }
+.restart-btn:hover { background: #2ecc71; }
+.quit-btn { background: #7f8c8d; width: 300px; font-size: 0.9rem; padding: 10px 20px; }
