@@ -149,15 +149,33 @@ function App() {
       for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()});
     });
     fullDeck.sort(() => Math.random() - 0.5);
+
     if (gameMode === "cpu") {
       setHand(sortHand(fullDeck.splice(0, 8)));
       setCpuHands([fullDeck.splice(0, 8), fullDeck.splice(0, 8), fullDeck.splice(0, 8)]);
-      setDeck(fullDeck); setSlots([null,null,null,null]);
-      setGameStatus("playing"); setTurn(0); setHasDrawn(false); setGameLog("あなたの番です");
+      setDeck(fullDeck); 
+      setSlots([null,null,null,null]);
+      setGameStatus("playing"); 
+      setTurn(0); 
+      setHasDrawn(false); 
+      setGameLog("あなたの番です");
     } else {
-      const updatedPlayers = { ...players };
-      Object.keys(updatedPlayers).forEach(id => { updatedPlayers[id].hand = sortHand(fullDeck.splice(0, 8)); });
-      update(ref(db, `rooms/${roomId}`), { status: "playing", deck: fullDeck, players: updatedPlayers, slots: [null,null,null,null], turn: 0, hasDrawn: false, log: "ゲーム開始！" });
+      // オンライン対戦時：各プレイヤーにカードを配る
+      const playerIds = Object.keys(players);
+      const updates = {};
+      
+      playerIds.forEach(id => {
+        updates[`players/${id}/hand`] = sortHand(fullDeck.splice(0, 8));
+      });
+
+      updates['status'] = "playing";
+      updates['deck'] = fullDeck;
+      updates['slots'] = [null, null, null, null];
+      updates['turn'] = 0;
+      updates['hasDrawn'] = false;
+      updates['log'] = "ゲーム開始！";
+
+      update(ref(db, `rooms/${roomId}`), updates);
     }
   };
 
@@ -169,7 +187,7 @@ function App() {
     if (newDeck.length === 0) return;
     const picked = newDeck.pop();
     const curH = gameMode === "online" ? players[myId].hand : hand;
-    const newHand = sortHand([...curH, picked]);
+    const newHand = sortHand([...(curH || []), picked]);
     if (gameMode === "cpu") {
       setHand(newHand); setDeck(newDeck); setHasDrawn(true);
       if (checkWin(newHand)) { setGameStatus("finished"); setLastWinDetails(calculateScore(newHand, true)); setGameLog("ツモ上がり！"); }
@@ -184,7 +202,7 @@ function App() {
     const mIdx = gameMode === "online" ? pIds.indexOf(myId) : 0;
     if (turn !== mIdx || !hasDrawn || gameStatus !== "playing") return;
     const curH = gameMode === "online" ? players[myId].hand : hand;
-    const newHand = [...curH];
+    const newHand = [...(curH || [])];
     const discarded = newHand.splice(idx, 1)[0];
     if (gameMode === "cpu") {
       const newSlots = [...slots]; newSlots[0] = discarded;
@@ -202,7 +220,7 @@ function App() {
     const picked = slots[idx];
     const newSlots = [...slots]; newSlots[idx] = null;
     const curH = gameMode === "online" ? players[myId].hand : hand;
-    const newHand = sortHand([...curH, picked]);
+    const newHand = sortHand([...(curH || []), picked]);
     if (gameMode === "cpu") {
       setHand(newHand); setSlots(newSlots); setHasDrawn(true);
       if (checkWin(newHand)) { setGameStatus("finished"); setLastWinDetails(calculateScore(newHand, true)); setGameLog("ロン上がり！"); }
@@ -214,9 +232,7 @@ function App() {
 
   const CardDisplay = ({ card, onClick, className }) => {
     if (!card) return null;
-    // 文字数に応じてフォントサイズを動的に変更
     const fontSize = card.name.length > 5 ? '0.5rem' : card.name.length > 3 ? '0.6rem' : '0.7rem';
-    
     return (
       <div className={`card ${className || ""}`} style={{ '--card-color': card.color }} onClick={onClick}>
         <div className="card-inner">
@@ -258,9 +274,7 @@ function App() {
             onDisconnect(newPlayerRef).remove();
             setIsJoined(true);
           }} className="mega-button">入室する</button>
-          <div className="invite-box">
-             <p className="invite-info">URL：{window.location.href}</p>
-          </div>
+          <div className="invite-box"><p className="invite-info">招待URL：{window.location.href}</p></div>
         </div>
       </div>
     );
@@ -278,17 +292,17 @@ function App() {
       </div>
 
       <div className="top-bar">
-        <span>{gameMode === "online" ? `Room: ${roomId}` : "Solo Play"}</span>
-        {gameMode === "online" && <button className="copy-url-btn" onClick={() => {navigator.clipboard.writeText(window.location.href); alert("コピーしました！")}}>URLコピー</button>}
+        <span>{gameMode === "online" ? `Room: ${roomId}` : "Solo Play (CPU)"}</span>
+        {gameMode === "online" && <button className="copy-url-btn" onClick={() => {navigator.clipboard.writeText(window.location.href); alert("コピーしました！")}}>URLをコピー</button>}
       </div>
       
       {gameStatus === "waiting" ? (
         <div className="start-screen centered">
           <div className="player-wait-list">
-             <h3>参加者</h3>
+             <h3>参加中のプレイヤー</h3>
              {gameMode === "online" ? Object.values(players).map((p, idx) => <div key={idx} className="wait-p-name">🍲 {p.name}</div>) : <div className="wait-p-name">🍲 あなた</div>}
           </div>
-          <button onClick={startAction} className="mega-button">開始</button>
+          <button onClick={startAction} className="mega-button">ゲーム開始</button>
         </div>
       ) : (
         <div className="playing-field">
