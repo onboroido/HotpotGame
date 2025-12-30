@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import './App.css'
 import { db } from './firebase'; 
-import { ref, onValue, set, update, push, onDisconnect, runTransaction } from "firebase/database";
+import { ref, onValue, set, update, push, onDisconnect, runTransaction, get } from "firebase/database";
 
 const CARD_TYPES = [
   { id: 1, name: '人参', category: '野菜', color: '#e67e22', icon: '🥕' },
@@ -19,8 +19,13 @@ const CARD_TYPES = [
 ];
 
 function App() {
-  const [gameMode, setGameMode] = useState(null);
-  const [roomId, setRoomId] = useState(() => new URLSearchParams(window.location.search).get('room') || "");
+  // ルームIDの初期化を強化：URLにあればそれを最優先、なければnull
+  const [roomId, setRoomId] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('room') || null;
+  });
+  
+  const [gameMode, setGameMode] = useState(roomId ? "online" : null); // IDがある状態で開いたらオンラインモードへ
   const [myId, setMyId] = useState(null);
   const [players, setPlayers] = useState({});
   const [gameStatus, setGameStatus] = useState("waiting");
@@ -124,12 +129,9 @@ function App() {
     }
   };
 
-  // --- ゲーム開始アクション (「もう一杯！」対応版) ---
   const startAction = useCallback(async (resetGame = false) => {
-    // UI側のフラグを先にリセット
     setShowFinalResult(false);
     setLastRoundHands(null);
-
     const fullDeck = [];
     CARD_TYPES.forEach(type => { for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()}); });
     fullDeck.sort(() => Math.random() - 0.5);
@@ -169,16 +171,15 @@ function App() {
       setSlots([null, null, null, null]);
       setTurn(0);
       setHasDrawn(false);
-      const nextRound = resetGame ? 1 : round + 1;
-      setRound(nextRound);
+      setRound(resetGame ? 1 : round + 1);
       setGameStatus("playing");
     }
   }, [gameMode, roomId, players, round]);
 
-  // --- オンライン同期 ---
   useEffect(() => {
     if (gameMode !== "online" || !roomId) return;
-    return onValue(ref(db, `rooms/${roomId}`), (s) => {
+    const roomRef = ref(db, `rooms/${roomId}`);
+    return onValue(roomRef, (s) => {
       const d = s.val();
       if (!d) return;
       setPlayers(d.players || {});
@@ -192,7 +193,6 @@ function App() {
     });
   }, [gameMode, roomId]);
 
-  // --- CPUロジック ---
   useEffect(() => {
     if (gameStatus !== "playing" || isProcessingRef.current) return;
     const pIds = Object.keys(players);
@@ -225,7 +225,6 @@ function App() {
     runCpuTurn();
   }, [turn, hasDrawn, gameStatus, players, deck, gameMode]);
 
-  // --- プレイヤー操作 ---
   const drawAction = () => {
     const pIds = Object.keys(players);
     const mId = gameMode === "online" ? myId : "me";
@@ -288,6 +287,7 @@ function App() {
     ) : null
   );
 
+  // --- メニュー画面の表示条件修正 ---
   if (!gameMode) return (
     <div className="game-container menu-bg">
       <div className="start-screen main-menu">
@@ -296,8 +296,9 @@ function App() {
           <button onClick={() => { setGameMode("cpu"); setMyId("me"); }} className="mega-button">一人で練習 (CPU戦)</button>
           <button onClick={() => {
             const r = Math.random().toString(36).substring(2,7);
-            setRoomId(r); setGameMode("online"); window.history.pushState({}, '', `?room=${r}`);
-          }} className="mega-button">オンライン対戦</button>
+            setRoomId(r); setGameMode("online");
+            window.history.pushState({}, '', `?room=${r}`);
+          }} className="mega-button">オンライン対戦（部屋を作る）</button>
         </div>
       </div>
     </div>
@@ -306,7 +307,7 @@ function App() {
   if (gameMode === "online" && !isJoined) return (
     <div className="game-container">
       <div className="start-screen">
-        <h2 className="section-title">プレイヤー登録</h2>
+        <h2 className="section-title">プレイヤー登録 (Room: {roomId})</h2>
         <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} className="name-input-large" placeholder="名前を入力" />
         <button onClick={async () => {
           if (!playerName.trim()) return;
@@ -398,9 +399,15 @@ function App() {
         <div className="win-overlay final-bg">
           <div className="final-card">
             <h1 className="final-title">🏆 最終結果 🏆</h1>
-            <div className="final-rank-list">{currentRank.map((r, i) => <div key={i} className={`final-rank-item rank-${i+1} ${r.isMe?'me':''}`}><span>{i+1}</span><span>{r.name}</span><span>{r.score}pt</span></div>)}</div>
+            <div className="final-rank-list">{currentRank.map((r, i) => (
+              <div key={i} className={`final-rank-item rank-${i+1} ${r.isMe?'me':''}`}>
+                <div className="rank-num">{i+1}</div>
+                <div className="rank-name">{r.name}</div>
+                <div className="rank-score">{r.score}pt</div>
+              </div>
+            ))}</div>
             {(gameMode === "cpu" || mIdx === 0) && <button onClick={() => startAction(true)} className="mega-button restart-btn">もう一杯！ (リスタート)</button>}
-            <button onClick={() => { setGameMode(null); setGameStatus("waiting"); window.location.search = ""; }} className="mega-button quit-btn">タイトルへ</button>
+            <button onClick={() => { window.location.href = window.location.origin + window.location.pathname; }} className="mega-button quit-btn">タイトルへ</button>
           </div>
         </div>
       )}
