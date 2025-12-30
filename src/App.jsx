@@ -39,90 +39,92 @@ function App() {
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
 
-  // --- 厳密な役判定ロジック ---
+  // --- 【重要】役判定：同種3枚 or 同カテゴリー別種3枚 ---
+  const isSet = (c1, c2, c3) => {
+    // 1. 同種3枚 (例: カニ, カニ, カニ)
+    if (c1.id === c2.id && c2.id === c3.id) return true;
+    
+    // 2. 同カテゴリー別種3枚 (例: カニ, エビ, 魚)
+    // カテゴリーが同じ かつ すべてIDが異なる
+    if (c1.category === c2.category && c2.category === c3.category) {
+      if (c1.id !== c2.id && c2.id !== c3.id && c1.id !== c3.id) return true;
+    }
+    return false;
+  };
+
   const getProcessedHand = (currentHand) => {
     if (!currentHand || currentHand.length < 3) return currentHand.map(c => ({...c, isCompleted: false}));
+    
+    let bestSetIds = [];
 
-    const cards = [...currentHand];
-    let bestCompletedInstanceIds = [];
-
-    // セット（同種3枚 or 同カテゴリー3種）かどうか判定
-    const isSet = (c1, c2, c3) => {
-      const sameKind = (c1.id === c2.id && c1.id === c3.id);
-      const sameCat = (c1.category === c2.category && c1.id !== c2.id && c1.id !== c3.id && c2.id !== c3.id);
-      return sameKind || sameCat;
-    };
-
-    // 再帰的に最大のセット数を探索（バックトラッキング）
-    const findSets = (remaining, found) => {
-      if (found.length > bestCompletedInstanceIds.length) {
-        bestCompletedInstanceIds = [...found];
+    // 再帰的に最適なセットの組み合わせを探す
+    const findMaxSets = (remaining, currentSetIds) => {
+      if (currentSetIds.length > bestSetIds.length) {
+        bestSetIds = [...currentSetIds];
       }
-      if (remaining.length < 3 || bestCompletedInstanceIds.length >= 9) return;
+      if (remaining.length < 3 || bestSetIds.length >= 9) return;
 
       for (let i = 0; i < remaining.length; i++) {
         for (let j = i + 1; j < remaining.length; j++) {
           for (let k = j + 1; k < remaining.length; k++) {
             if (isSet(remaining[i], remaining[j], remaining[k])) {
-              const newFound = [...found, remaining[i].instanceId, remaining[j].instanceId, remaining[k].instanceId];
-              const newRemaining = remaining.filter((_, idx) => idx !== i && idx !== j && idx !== k);
-              findSets(newRemaining, newFound);
-              if (bestCompletedInstanceIds.length >= 9) return;
+              const newFoundIds = [
+                ...currentSetIds, 
+                remaining[i].instanceId, 
+                remaining[j].instanceId, 
+                remaining[k].instanceId
+              ];
+              const nextRemaining = remaining.filter((_, idx) => idx !== i && idx !== j && idx !== k);
+              findMaxSets(nextRemaining, newFoundIds);
+              if (bestSetIds.length >= 9) return;
             }
           }
         }
       }
     };
 
-    findSets(cards, []);
+    findMaxSets(currentHand, []);
 
     return currentHand.map(c => ({
       ...c,
-      isCompleted: bestCompletedInstanceIds.includes(c.instanceId)
+      isCompleted: bestSetIds.includes(c.instanceId)
     }));
   };
 
   const checkWin = (currentHand) => {
     const processed = getProcessedHand(currentHand);
-    const completedCount = processed.filter(c => c.isCompleted).length;
-    return completedCount >= 9;
+    return processed.filter(c => c.isCompleted).length >= 9;
   };
 
   const calculateScore = (finalHand, isWinner) => {
     const processed = getProcessedHand(finalHand);
-    let score = isWinner ? 25 : 0;
-    
-    // 完成したセットごとに加点
     const completedCards = processed.filter(c => c.isCompleted);
-    // セットを特定（簡易的に3枚ずつ区切り、同種か同カテゴリーか判定）
+    let score = isWinner ? 25 : 0;
+
+    // セットごとにスコア加算 (3枚1組でループ)
+    // バックトラッキングで得られた完成カードを3枚ずつチェック
     for (let i = 0; i < completedCards.length; i += 3) {
       const s = completedCards.slice(i, i + 3);
       if (s.length === 3) {
-        if (s[0].id === s[1].id && s[1].id === s[2].id) score += 25; // 同種
-        else score += 15; // 同カテゴリー
+        if (s[0].id === s[1].id) score += 25; // 同種セット
+        else score += 15; // 同カテゴリーセット
       }
     }
     return { total: score };
   };
 
-  // --- CPU思考強化 ---
+  // --- CPU思考ロジック ---
   const cpuThink = (currentHand) => {
     let bestDiscardIdx = 0;
-    let maxPotential = -1;
+    let minUseless = 999;
 
     currentHand.forEach((_, idx) => {
       const testHand = currentHand.filter((__, i) => i !== idx);
-      // 捨てた後の手札の「有効性」を評価
-      // ここでは簡易的に「あと何枚でセットが完成するか」の近さを計算
-      let potential = 0;
-      testHand.forEach(c => {
-        const sameKind = testHand.filter(tc => tc.id === c.id).length;
-        const sameCat = testHand.filter(tc => tc.category === c.category).length;
-        potential += (sameKind * 5 + sameCat * 2); 
-      });
-
-      if (potential > maxPotential) {
-        maxPotential = potential;
+      const processed = getProcessedHand(testHand);
+      const uselessCount = processed.filter(c => !c.isCompleted).length;
+      
+      if (uselessCount < minUseless) {
+        minUseless = uselessCount;
         bestDiscardIdx = idx;
       }
     });
@@ -173,18 +175,18 @@ function App() {
       });
 
       const history = resetGame ? [] : (currentData.historyFirstPlayers || []);
-      const firstIdx = (history.length === 0) ? Math.floor(Math.random()*4) : (history[history.length-1] + 1) % 4;
+      const nextFirstIdx = (history.length === 0) ? Math.floor(Math.random() * 4) : (history[history.length - 1] + 1) % 4;
       
       currentData.players = newPlayers;
       currentData.deck = fullDeck;
       currentData.slots = [null, null, null, null];
-      currentData.turn = firstIdx;
+      currentData.turn = nextFirstIdx;
       currentData.hasDrawn = false;
       currentData.status = "playing";
       currentData.round = resetGame ? 1 : (currentData.round || 1) + 1;
       currentData.lastRoundHands = null;
       currentData.showFinalResult = false;
-      currentData.historyFirstPlayers = [...history, firstIdx];
+      currentData.historyFirstPlayers = [...history, nextFirstIdx];
       return currentData;
     });
   }, [roomId]);
@@ -212,11 +214,11 @@ function App() {
     if (pIds.length < 4) return;
     const currentPlayerId = pIds[turn];
     if (!players[currentPlayerId]?.isCpu) return;
-    if (myId !== pIds[0]) return; // ホストがCPUを代行
+    if (myId !== pIds[0]) return; 
 
     const runCpuTurn = async () => {
       isProcessingRef.current = true;
-      await new Promise(r => setTimeout(r, 1200));
+      await new Promise(r => setTimeout(r, 1000));
       const cpuHand = players[currentPlayerId].hand || [];
       
       if (!hasDrawn) {
@@ -285,32 +287,20 @@ function App() {
     ) : null
   );
 
-  if (!gameMode) return (
-    <div className="game-container menu-bg">
-      <div className="start-screen main-menu">
-        <h1 className="title-large">🍲 Hotpot Game</h1>
-        <div className="menu-buttons">
-          <button onClick={() => {
-            const r = Math.random().toString(36).substring(2,7);
-            setRoomId(r); setGameMode("online");
-            window.history.pushState({}, '', `?room=${r}`);
-          }} className="mega-button">オンライン対戦（部屋を作る）</button>
-        </div>
-      </div>
-    </div>
-  );
-
   if (!isJoined) return (
     <div className="game-container">
       <div className="start-screen">
+        <h1 className="title-large">🍲 Hotpot Game</h1>
         <h2 className="section-title">プレイヤー登録</h2>
         <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} className="name-input-large" placeholder="名前を入力" />
         <button onClick={async () => {
           if (!playerName.trim()) return;
-          const pRef = push(ref(db, `rooms/${roomId}/players`));
+          const rId = roomId || Math.random().toString(36).substring(2,7);
+          if (!roomId) { setRoomId(rId); window.history.pushState({}, '', `?room=${rId}`); }
+          const pRef = push(ref(db, `rooms/${rId}/players`));
           setMyId(pRef.key);
           await set(pRef, { name: playerName, hand: [], score: 0 });
-          onDisconnect(pRef).remove(); setIsJoined(true);
+          onDisconnect(pRef).remove(); setIsJoined(true); setGameMode("online");
         }} className="mega-button">参加する</button>
       </div>
     </div>
