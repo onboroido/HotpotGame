@@ -33,91 +33,96 @@ function App() {
   const [hasDrawn, setHasDrawn] = useState(false);
   const [showFinalResult, setShowFinalResult] = useState(false);
   const [lastRoundHands, setLastRoundHands] = useState(null);
-  const [historyFirstPlayers, setHistoryFirstPlayers] = useState([]); // 親（先行）の履歴
+  const [historyFirstPlayers, setHistoryFirstPlayers] = useState([]);
 
   const isProcessingRef = useRef(false);
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
 
-  // --- 強化版：判定ロジック（重複カウント防止） ---
+  // --- 厳密な役判定ロジック ---
   const getProcessedHand = (currentHand) => {
-    if (!currentHand || currentHand.length < 9) return currentHand.map(c => ({...c, isCompleted: false}));
-    
-    // 全組み合わせから最大役数を探すための簡易的なバックトラッキング
-    const findBestSets = (remainingCards) => {
-      if (remainingCards.length < 3) return [];
-      let bestSets = [];
+    if (!currentHand || currentHand.length < 3) return currentHand.map(c => ({...c, isCompleted: false}));
 
-      for (let i = 0; i < remainingCards.length; i++) {
-        for (let j = i + 1; j < remainingCards.length; j++) {
-          for (let k = j + 1; k < remainingCards.length; k++) {
-            const c1 = remainingCards[i];
-            const c2 = remainingCards[j];
-            const c3 = remainingCards[k];
+    const cards = [...currentHand];
+    let bestCompletedInstanceIds = [];
 
-            const isSameKind = (c1.id === c2.id && c2.id === c3.id);
-            const isSameCat = (c1.category === c2.category && c1.id !== c2.id && c2.id !== c3.id && c1.id !== c3.id);
+    // セット（同種3枚 or 同カテゴリー3種）かどうか判定
+    const isSet = (c1, c2, c3) => {
+      const sameKind = (c1.id === c2.id && c1.id === c3.id);
+      const sameCat = (c1.category === c2.category && c1.id !== c2.id && c1.id !== c3.id && c2.id !== c3.id);
+      return sameKind || sameCat;
+    };
 
-            if (isSameKind || isSameCat) {
-              const currentSet = [c1.instanceId, c2.instanceId, c3.instanceId];
-              const nextRemaining = remainingCards.filter(c => !currentSet.includes(c.instanceId));
-              const subSets = findBestSets(nextRemaining);
-              if (1 + subSets.length > bestSets.length / 3) {
-                bestSets = [...currentSet, ...subSets];
-              }
-              if (bestSets.length >= 9) return bestSets; // 3セット見つかれば即終了
+    // 再帰的に最大のセット数を探索（バックトラッキング）
+    const findSets = (remaining, found) => {
+      if (found.length > bestCompletedInstanceIds.length) {
+        bestCompletedInstanceIds = [...found];
+      }
+      if (remaining.length < 3 || bestCompletedInstanceIds.length >= 9) return;
+
+      for (let i = 0; i < remaining.length; i++) {
+        for (let j = i + 1; j < remaining.length; j++) {
+          for (let k = j + 1; k < remaining.length; k++) {
+            if (isSet(remaining[i], remaining[j], remaining[k])) {
+              const newFound = [...found, remaining[i].instanceId, remaining[j].instanceId, remaining[k].instanceId];
+              const newRemaining = remaining.filter((_, idx) => idx !== i && idx !== j && idx !== k);
+              findSets(newRemaining, newFound);
+              if (bestCompletedInstanceIds.length >= 9) return;
             }
           }
         }
       }
-      return bestSets;
     };
 
-    const completedIds = findBestSets(currentHand);
+    findSets(cards, []);
+
     return currentHand.map(c => ({
       ...c,
-      isCompleted: completedIds.includes(c.instanceId)
+      isCompleted: bestCompletedInstanceIds.includes(c.instanceId)
     }));
   };
 
   const checkWin = (currentHand) => {
     const processed = getProcessedHand(currentHand);
-    return processed.filter(c => c.isCompleted).length >= 9;
+    const completedCount = processed.filter(c => c.isCompleted).length;
+    return completedCount >= 9;
   };
 
   const calculateScore = (finalHand, isWinner) => {
     const processed = getProcessedHand(finalHand);
-    const setCount = processed.filter(c => c.isCompleted).length / 3;
     let score = isWinner ? 25 : 0;
     
-    // セットの種類を再判定して加点
+    // 完成したセットごとに加点
     const completedCards = processed.filter(c => c.isCompleted);
+    // セットを特定（簡易的に3枚ずつ区切り、同種か同カテゴリーか判定）
     for (let i = 0; i < completedCards.length; i += 3) {
       const s = completedCards.slice(i, i + 3);
-      if (s[0].id === s[1].id) score += 25; // 同種
-      else score += 15; // 同カテゴリー
+      if (s.length === 3) {
+        if (s[0].id === s[1].id && s[1].id === s[2].id) score += 25; // 同種
+        else score += 15; // 同カテゴリー
+      }
     }
     return { total: score };
   };
 
-  // --- CPU強化：役を狙う思考ルーチン ---
-  const cpuThink = (currentHand, currentDeckCount) => {
-    // 1枚捨てて、最も「役の種」が残る組み合わせを選ぶ
+  // --- CPU思考強化 ---
+  const cpuThink = (currentHand) => {
     let bestDiscardIdx = 0;
-    let minUselessScore = Infinity;
+    let maxPotential = -1;
 
     currentHand.forEach((_, idx) => {
       const testHand = currentHand.filter((__, i) => i !== idx);
-      // 役になっていないカードの「孤立度」を計算
-      let uselessScore = 0;
+      // 捨てた後の手札の「有効性」を評価
+      // ここでは簡易的に「あと何枚でセットが完成するか」の近さを計算
+      let potential = 0;
       testHand.forEach(c => {
         const sameKind = testHand.filter(tc => tc.id === c.id).length;
         const sameCat = testHand.filter(tc => tc.category === c.category).length;
-        uselessScore -= (sameKind * 10 + sameCat * 2); // 仲間が多いほどスコアを下げる
+        potential += (sameKind * 5 + sameCat * 2); 
       });
 
-      if (uselessScore < minUselessScore) {
-        minUselessScore = uselessScore;
+      if (potential > maxPotential) {
+        maxPotential = potential;
         bestDiscardIdx = idx;
       }
     });
@@ -139,19 +144,9 @@ function App() {
       });
       currentData.status = "finished";
       currentData.lastRoundHands = roundHands;
-      // 最終結果表示フラグをDB側で管理（全員に表示するため）
-      if (currentData.round >= 3) {
-        currentData.showFinalResult = true;
-      }
+      if (currentData.round >= 3) currentData.showFinalResult = true;
       return currentData;
     });
-  };
-
-  // --- 先行プレイヤーの選択ロジック（シャッフル＆履歴考慮） ---
-  const pickFirstPlayerIdx = (pIds, history) => {
-    const availableIndices = pIds.map((_, i) => i).filter(i => !history.includes(i));
-    if (availableIndices.length === 0) return Math.floor(Math.random() * pIds.length);
-    return availableIndices[Math.floor(Math.random() * availableIndices.length)];
   };
 
   const startAction = useCallback(async (resetGame = false) => {
@@ -159,51 +154,41 @@ function App() {
     CARD_TYPES.forEach(type => { for(let i=0; i<5; i++) fullDeck.push({...type, instanceId: Math.random()}); });
     fullDeck.sort(() => Math.random() - 0.5);
 
-    if (gameMode === "online") {
-      const roomRef = ref(db, `rooms/${roomId}`);
-      runTransaction(roomRef, (currentData) => {
-        if (!currentData) return;
-        const pIds = Object.keys(currentData.players).filter(id => !id.startsWith("cpu_"));
-        const newPlayers = {};
-        
-        // IDの固定リストを作成（順番制御のため）
-        const allIds = [...pIds];
-        while(allIds.length < 4) allIds.push(`cpu_${allIds.length}`);
+    const roomRef = ref(db, `rooms/${roomId}`);
+    runTransaction(roomRef, (currentData) => {
+      if (!currentData) return;
+      const pIds = Object.keys(currentData.players).filter(id => !id.startsWith("cpu_"));
+      const allIds = [...pIds];
+      while(allIds.length < 4) allIds.push(`cpu_${allIds.length}`);
 
-        allIds.forEach(id => {
-          newPlayers[id] = { 
-            ...currentData.players[id], 
-            name: id.startsWith("cpu") ? `CPU ${id.split('_')[1]}` : currentData.players[id].name,
-            hand: sortHand(fullDeck.splice(0, 8)), 
-            score: resetGame ? 0 : (currentData.players[id]?.score || 0),
-            isCpu: id.startsWith("cpu")
-          };
-        });
-
-        const history = resetGame ? [] : (currentData.historyFirstPlayers || []);
-        const firstIdx = pickFirstPlayerIdx(allIds, history);
-        
-        currentData.players = newPlayers;
-        currentData.deck = fullDeck;
-        currentData.slots = [null, null, null, null];
-        currentData.turn = firstIdx; // 先行を決定
-        currentData.hasDrawn = false;
-        currentData.status = "playing";
-        currentData.round = resetGame ? 1 : (currentData.round || 1) + 1;
-        currentData.lastRoundHands = null;
-        currentData.showFinalResult = false;
-        currentData.historyFirstPlayers = [...history, firstIdx];
-        return currentData;
+      const newPlayers = {};
+      allIds.forEach(id => {
+        newPlayers[id] = { 
+          ...currentData.players[id], 
+          name: id.startsWith("cpu") ? `CPU ${id.split('_')[1]}` : currentData.players[id].name,
+          hand: sortHand(fullDeck.splice(0, 8)), 
+          score: resetGame ? 0 : (currentData.players[id]?.score || 0),
+          isCpu: id.startsWith("cpu")
+        };
       });
-    } else {
-      // CPUモードのリセット処理（同様のロジック）
-      setGameStatus("playing");
-      setShowFinalResult(false);
-      // (CPUモードの詳細は省略可能ですが、ロジックはオンライン側に準拠)
-    }
-  }, [gameMode, roomId]);
 
-  // --- 同期とCPU実行（省略せず統合） ---
+      const history = resetGame ? [] : (currentData.historyFirstPlayers || []);
+      const firstIdx = (history.length === 0) ? Math.floor(Math.random()*4) : (history[history.length-1] + 1) % 4;
+      
+      currentData.players = newPlayers;
+      currentData.deck = fullDeck;
+      currentData.slots = [null, null, null, null];
+      currentData.turn = firstIdx;
+      currentData.hasDrawn = false;
+      currentData.status = "playing";
+      currentData.round = resetGame ? 1 : (currentData.round || 1) + 1;
+      currentData.lastRoundHands = null;
+      currentData.showFinalResult = false;
+      currentData.historyFirstPlayers = [...history, firstIdx];
+      return currentData;
+    });
+  }, [roomId]);
+
   useEffect(() => {
     if (gameMode !== "online" || !roomId) return;
     return onValue(ref(db, `rooms/${roomId}`), (s) => {
@@ -227,27 +212,22 @@ function App() {
     if (pIds.length < 4) return;
     const currentPlayerId = pIds[turn];
     if (!players[currentPlayerId]?.isCpu) return;
-    if (gameMode === "online" && myId !== pIds[0]) return;
+    if (myId !== pIds[0]) return; // ホストがCPUを代行
 
     const runCpuTurn = async () => {
       isProcessingRef.current = true;
       await new Promise(r => setTimeout(r, 1200));
-      
       const cpuHand = players[currentPlayerId].hand || [];
       
       if (!hasDrawn) {
-        // 山札から引く
         const newDeck = [...deck];
+        if (newDeck.length === 0) { finalizeGameScores(null, []); return; }
         const picked = newDeck.pop();
         const nextHand = sortHand([...cpuHand, picked]);
-        if (checkWin(nextHand)) {
-          finalizeGameScores(currentPlayerId, nextHand);
-        } else {
-          update(ref(db, `rooms/${roomId}`), { deck: newDeck, [`players/${currentPlayerId}/hand`]: nextHand, hasDrawn: true });
-        }
+        if (checkWin(nextHand)) finalizeGameScores(currentPlayerId, nextHand);
+        else update(ref(db, `rooms/${roomId}`), { deck: newDeck, [`players/${currentPlayerId}/hand`]: nextHand, hasDrawn: true });
       } else {
-        // 捨て札（強化AIロジック使用）
-        const discardIdx = cpuThink(cpuHand, deck.length);
+        const discardIdx = cpuThink(cpuHand);
         const newHand = [...cpuHand];
         const discarded = newHand.splice(discardIdx, 1)[0];
         update(ref(db, `rooms/${roomId}`), { 
@@ -261,7 +241,6 @@ function App() {
     runCpuTurn();
   }, [turn, hasDrawn, gameStatus, players, deck]);
 
-  // --- プレイヤー操作 (描画UIは前バージョンを継承) ---
   const drawAction = () => {
     const pIds = Object.keys(players);
     if (turn !== pIds.indexOf(myId) || hasDrawn) return;
@@ -282,8 +261,7 @@ function App() {
 
   const pickFromSlotAction = (idx) => {
     const pIds = Object.keys(players);
-    const mIdx = pIds.indexOf(myId);
-    if (turn !== mIdx || hasDrawn || !slots[idx]) return;
+    if (turn !== pIds.indexOf(myId) || hasDrawn || !slots[idx]) return;
     runTransaction(ref(db, `rooms/${roomId}`), (d) => {
       if (!d || !d.slots[idx]) return;
       const picked = d.slots[idx]; d.slots[idx] = null;
@@ -307,13 +285,11 @@ function App() {
     ) : null
   );
 
-  // --- 画面レンダリング ---
   if (!gameMode) return (
     <div className="game-container menu-bg">
       <div className="start-screen main-menu">
         <h1 className="title-large">🍲 Hotpot Game</h1>
         <div className="menu-buttons">
-          <button onClick={() => { setGameMode("cpu"); setMyId("me"); }} className="mega-button disabled">一人で練習（準備中）</button>
           <button onClick={() => {
             const r = Math.random().toString(36).substring(2,7);
             setRoomId(r); setGameMode("online");
@@ -324,7 +300,7 @@ function App() {
     </div>
   );
 
-  if (gameMode === "online" && !isJoined) return (
+  if (!isJoined) return (
     <div className="game-container">
       <div className="start-screen">
         <h2 className="section-title">プレイヤー登録</h2>
@@ -349,7 +325,7 @@ function App() {
     <div className="game-container">
       <div className="top-ui-bar">
         <div className="round-badge-new">Round {round}/3</div>
-        {gameMode === "online" && <div className="invite-link-box" onClick={() => { navigator.clipboard.writeText(getInviteUrl()); alert("コピーしました"); }}>🔗 URLをコピー</div>}
+        <div className="invite-link-box" onClick={() => { navigator.clipboard.writeText(getInviteUrl()); alert("コピーしました"); }}>🔗 URLをコピー</div>
       </div>
 
       {gameStatus === "waiting" ? (
@@ -368,12 +344,10 @@ function App() {
               <div className="side-container left"><div className={`p-box ${(turn === (mIdx+1)%4) ? 'active' : ''}`}>{players[pIds[(mIdx+1)%4]]?.name || "-"}</div></div>
               <div className="board-center">
                 <div className="slots-grid">
-                  {[2, 1, 0, 3].map(offset => {
-                    const idx = (mIdx + offset) % 4;
-                    if (offset === 0) return <div key="deck" className={`deck ${(!hasDrawn && turn===mIdx) ? 'can-draw' : ''}`} onClick={drawAction}>山札 ({deck.length})</div>;
-                    const slotClass = offset === 2 ? 't' : offset === 1 ? 'l' : 'r';
-                    return <div key={slotClass} className={`slot ${slotClass}`} onClick={()=>pickFromSlotAction(idx)}><CardDisplay card={slots[idx]}/></div>;
-                  })}
+                  <div className="slot t" onClick={()=>pickFromSlotAction((mIdx+2)%4)}><CardDisplay card={slots[(mIdx+2)%4]}/></div>
+                  <div className="slot l" onClick={()=>pickFromSlotAction((mIdx+1)%4)}><CardDisplay card={slots[(mIdx+1)%4]}/></div>
+                  <div className={`deck ${(!hasDrawn && turn===mIdx) ? 'can-draw' : ''}`} onClick={drawAction}>山札 ({deck.length})</div>
+                  <div className="slot r" onClick={()=>pickFromSlotAction((mIdx+3)%4)}><CardDisplay card={slots[(mIdx+3)%4]}/></div>
                   <div className="slot b" onClick={()=>pickFromSlotAction(mIdx)}><CardDisplay card={slots[mIdx]}/></div>
                 </div>
               </div>
