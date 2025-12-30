@@ -19,7 +19,6 @@ const CARD_TYPES = [
 ];
 
 function App() {
-  // 初期状態をメニュー表示に戻す
   const [gameMode, setGameMode] = useState(null); 
   const [roomId, setRoomId] = useState(() => new URLSearchParams(window.location.search).get('room') || null);
   const [myId, setMyId] = useState(null);
@@ -39,7 +38,7 @@ function App() {
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
 
-  // 役判定ロジック
+  // 役判定
   const isSet = (c1, c2, c3) => {
     if (c1.id === c2.id && c2.id === c3.id) return true;
     if (c1.category === c2.category && c2.category === c3.category) {
@@ -76,7 +75,6 @@ function App() {
     return processed.filter(c => c.isCompleted).length >= 9;
   };
 
-  // スコア計算の修正：上がりは一律+25、セットごとに加点
   const calculateScore = (finalHand, isWinner) => {
     const processed = getProcessedHand(finalHand);
     const completedCards = processed.filter(c => c.isCompleted);
@@ -84,17 +82,21 @@ function App() {
     for (let i = 0; i < completedCards.length; i += 3) {
       const s = completedCards.slice(i, i + 3);
       if (s.length === 3) {
-        if (s[0].id === s[1].id) roundScore += 25; // 同種セット
-        else roundScore += 15; // 同カテゴリーセット
+        if (s[0].id === s[1].id) roundScore += 25; 
+        else roundScore += 15;
       }
     }
     return roundScore;
   };
 
-  // スコア計算の多重実行を防ぐための修正
+  // スコア計算の多重実行を完全に防ぐための修正
   const finalizeGameScores = (winnerId = null, winningHand = null) => {
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+
     const roomRef = ref(db, `rooms/${roomId}`);
     runTransaction(roomRef, (currentData) => {
+      // 既にこのラウンドの終了処理が始まっていたら何もしない
       if (!currentData || currentData.status === "finished") return;
       
       const pIds = Object.keys(currentData.players);
@@ -105,9 +107,9 @@ function App() {
         const targetHand = isWinner ? winningHand : (currentData.players[id].hand || []);
         const roundScore = calculateScore(targetHand, isWinner);
         
-        // 既存の合計スコアに今ラウンドの得点を足す
-        const currentTotal = currentData.players[id].score || 0;
-        currentData.players[id].score = currentTotal + roundScore;
+        // 合計スコアを加算
+        const prevScore = currentData.players[id].score || 0;
+        currentData.players[id].score = prevScore + roundScore;
         
         roundHands[id] = { 
           name: currentData.players[id].name, 
@@ -121,6 +123,8 @@ function App() {
       currentData.lastRoundHands = roundHands;
       if (currentData.round >= 3) currentData.showFinalResult = true;
       return currentData;
+    }).finally(() => {
+      isProcessingRef.current = false;
     });
   };
 
@@ -164,6 +168,15 @@ function App() {
     });
   }, [roomId]);
 
+  // タイトルへ戻る処理
+  const backToTitle = () => {
+    setGameMode(null);
+    setIsJoined(false);
+    setRoomId(null);
+    setMyId(null);
+    window.history.pushState({}, '', window.location.pathname);
+  };
+
   useEffect(() => {
     if (!roomId) return;
     return onValue(ref(db, `rooms/${roomId}`), (s) => {
@@ -181,7 +194,6 @@ function App() {
     });
   }, [roomId]);
 
-  // CPU思考・実行
   useEffect(() => {
     if (gameStatus !== "playing" || isProcessingRef.current) return;
     const pIds = Object.keys(players);
@@ -191,19 +203,28 @@ function App() {
     if (myId !== pIds[0]) return; 
 
     const runCpuTurn = async () => {
+      if (isProcessingRef.current) return;
       isProcessingRef.current = true;
       await new Promise(r => setTimeout(r, 1000));
       const cpuHand = players[currentPlayerId].hand || [];
       
       if (!hasDrawn) {
         const newDeck = [...deck];
-        if (newDeck.length === 0) { finalizeGameScores(null, []); return; }
+        if (newDeck.length === 0) { 
+          isProcessingRef.current = false;
+          finalizeGameScores(null, []); 
+          return; 
+        }
         const picked = newDeck.pop();
         const nextHand = sortHand([...cpuHand, picked]);
-        if (checkWin(nextHand)) finalizeGameScores(currentPlayerId, nextHand);
-        else update(ref(db, `rooms/${roomId}`), { deck: newDeck, [`players/${currentPlayerId}/hand`]: nextHand, hasDrawn: true });
+        if (checkWin(nextHand)) {
+          isProcessingRef.current = false;
+          finalizeGameScores(currentPlayerId, nextHand);
+        } else {
+          update(ref(db, `rooms/${roomId}`), { deck: newDeck, [`players/${currentPlayerId}/hand`]: nextHand, hasDrawn: true });
+          isProcessingRef.current = false;
+        }
       } else {
-        // CPU簡易思考：不要なカード（セット外）を捨てる
         const processed = getProcessedHand(cpuHand);
         const uselessIdx = processed.findIndex(c => !c.isCompleted);
         const discardIdx = uselessIdx !== -1 ? uselessIdx : 0;
@@ -214,13 +235,12 @@ function App() {
           [`slots/${turn}`]: discarded, 
           turn: (turn + 1) % 4, hasDrawn: false 
         });
+        isProcessingRef.current = false;
       }
-      isProcessingRef.current = false;
     };
     runCpuTurn();
   }, [turn, hasDrawn, gameStatus, players, deck]);
 
-  // プレイヤーアクション
   const drawAction = () => {
     const pIds = Object.keys(players);
     if (turn !== pIds.indexOf(myId) || hasDrawn) return;
@@ -266,9 +286,6 @@ function App() {
     ) : null
   );
 
-  // --- 画面レンダリング ---
-  
-  // メニュー画面（URLにルームIDがない、またはgameModeが未選択の場合）
   if (!gameMode && !isJoined) return (
     <div className="game-container menu-bg">
       <div className="start-screen main-menu">
@@ -285,7 +302,6 @@ function App() {
     </div>
   );
 
-  // 名前入力画面
   if (!isJoined) return (
     <div className="game-container">
       <div className="start-screen">
@@ -384,7 +400,10 @@ function App() {
                 <span>{i+1}</span><span>{r.name}</span><span>{r.score}pt</span>
               </div>
             ))}</div>
-            {mIdx === 0 && <button onClick={() => startAction(true)} className="mega-button restart-btn">もう一杯！</button>}
+            <div className="final-actions">
+              {mIdx === 0 && <button onClick={() => startAction(true)} className="mega-button restart-btn">もう一杯！（再戦）</button>}
+              <button onClick={backToTitle} className="mega-button secondary">タイトルへ戻る</button>
+            </div>
           </div>
         </div>
       )}
