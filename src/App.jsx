@@ -19,7 +19,8 @@ const CARD_TYPES = [
 ];
 
 function App() {
-  const [gameMode, setGameMode] = useState(() => new URLSearchParams(window.location.search).get('room') ? "online" : null);
+  // 初期状態をメニュー表示に戻す
+  const [gameMode, setGameMode] = useState(null); 
   const [roomId, setRoomId] = useState(() => new URLSearchParams(window.location.search).get('room') || null);
   const [myId, setMyId] = useState(null);
   const [players, setPlayers] = useState({});
@@ -33,19 +34,14 @@ function App() {
   const [hasDrawn, setHasDrawn] = useState(false);
   const [showFinalResult, setShowFinalResult] = useState(false);
   const [lastRoundHands, setLastRoundHands] = useState(null);
-  const [historyFirstPlayers, setHistoryFirstPlayers] = useState([]);
 
   const isProcessingRef = useRef(false);
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
 
-  // --- 【重要】役判定：同種3枚 or 同カテゴリー別種3枚 ---
+  // 役判定ロジック
   const isSet = (c1, c2, c3) => {
-    // 1. 同種3枚 (例: カニ, カニ, カニ)
     if (c1.id === c2.id && c2.id === c3.id) return true;
-    
-    // 2. 同カテゴリー別種3枚 (例: カニ, エビ, 魚)
-    // カテゴリーが同じ かつ すべてIDが異なる
     if (c1.category === c2.category && c2.category === c3.category) {
       if (c1.id !== c2.id && c2.id !== c3.id && c1.id !== c3.id) return true;
     }
@@ -54,26 +50,15 @@ function App() {
 
   const getProcessedHand = (currentHand) => {
     if (!currentHand || currentHand.length < 3) return currentHand.map(c => ({...c, isCompleted: false}));
-    
     let bestSetIds = [];
-
-    // 再帰的に最適なセットの組み合わせを探す
     const findMaxSets = (remaining, currentSetIds) => {
-      if (currentSetIds.length > bestSetIds.length) {
-        bestSetIds = [...currentSetIds];
-      }
+      if (currentSetIds.length > bestSetIds.length) bestSetIds = [...currentSetIds];
       if (remaining.length < 3 || bestSetIds.length >= 9) return;
-
       for (let i = 0; i < remaining.length; i++) {
         for (let j = i + 1; j < remaining.length; j++) {
           for (let k = j + 1; k < remaining.length; k++) {
             if (isSet(remaining[i], remaining[j], remaining[k])) {
-              const newFoundIds = [
-                ...currentSetIds, 
-                remaining[i].instanceId, 
-                remaining[j].instanceId, 
-                remaining[k].instanceId
-              ];
+              const newFoundIds = [...currentSetIds, remaining[i].instanceId, remaining[j].instanceId, remaining[k].instanceId];
               const nextRemaining = remaining.filter((_, idx) => idx !== i && idx !== j && idx !== k);
               findMaxSets(nextRemaining, newFoundIds);
               if (bestSetIds.length >= 9) return;
@@ -82,13 +67,8 @@ function App() {
         }
       }
     };
-
     findMaxSets(currentHand, []);
-
-    return currentHand.map(c => ({
-      ...c,
-      isCompleted: bestSetIds.includes(c.instanceId)
-    }));
+    return currentHand.map(c => ({...c, isCompleted: bestSetIds.includes(c.instanceId)}));
   };
 
   const checkWin = (currentHand) => {
@@ -96,54 +76,47 @@ function App() {
     return processed.filter(c => c.isCompleted).length >= 9;
   };
 
+  // スコア計算の修正：上がりは一律+25、セットごとに加点
   const calculateScore = (finalHand, isWinner) => {
     const processed = getProcessedHand(finalHand);
     const completedCards = processed.filter(c => c.isCompleted);
-    let score = isWinner ? 25 : 0;
-
-    // セットごとにスコア加算 (3枚1組でループ)
-    // バックトラッキングで得られた完成カードを3枚ずつチェック
+    let roundScore = isWinner ? 25 : 0;
     for (let i = 0; i < completedCards.length; i += 3) {
       const s = completedCards.slice(i, i + 3);
       if (s.length === 3) {
-        if (s[0].id === s[1].id) score += 25; // 同種セット
-        else score += 15; // 同カテゴリーセット
+        if (s[0].id === s[1].id) roundScore += 25; // 同種セット
+        else roundScore += 15; // 同カテゴリーセット
       }
     }
-    return { total: score };
+    return roundScore;
   };
 
-  // --- CPU思考ロジック ---
-  const cpuThink = (currentHand) => {
-    let bestDiscardIdx = 0;
-    let minUseless = 999;
-
-    currentHand.forEach((_, idx) => {
-      const testHand = currentHand.filter((__, i) => i !== idx);
-      const processed = getProcessedHand(testHand);
-      const uselessCount = processed.filter(c => !c.isCompleted).length;
-      
-      if (uselessCount < minUseless) {
-        minUseless = uselessCount;
-        bestDiscardIdx = idx;
-      }
-    });
-    return bestDiscardIdx;
-  };
-
+  // スコア計算の多重実行を防ぐための修正
   const finalizeGameScores = (winnerId = null, winningHand = null) => {
     const roomRef = ref(db, `rooms/${roomId}`);
     runTransaction(roomRef, (currentData) => {
       if (!currentData || currentData.status === "finished") return;
+      
       const pIds = Object.keys(currentData.players);
       const roundHands = {};
+      
       pIds.forEach(id => {
         const isWinner = (id === winnerId);
         const targetHand = isWinner ? winningHand : (currentData.players[id].hand || []);
-        const scoreData = calculateScore(targetHand, isWinner);
-        currentData.players[id].score = (currentData.players[id].score || 0) + scoreData.total;
-        roundHands[id] = { name: currentData.players[id].name, hand: targetHand, isWinner, roundScore: scoreData.total };
+        const roundScore = calculateScore(targetHand, isWinner);
+        
+        // 既存の合計スコアに今ラウンドの得点を足す
+        const currentTotal = currentData.players[id].score || 0;
+        currentData.players[id].score = currentTotal + roundScore;
+        
+        roundHands[id] = { 
+          name: currentData.players[id].name, 
+          hand: targetHand, 
+          isWinner, 
+          roundScore 
+        };
       });
+
       currentData.status = "finished";
       currentData.lastRoundHands = roundHands;
       if (currentData.round >= 3) currentData.showFinalResult = true;
@@ -192,7 +165,7 @@ function App() {
   }, [roomId]);
 
   useEffect(() => {
-    if (gameMode !== "online" || !roomId) return;
+    if (!roomId) return;
     return onValue(ref(db, `rooms/${roomId}`), (s) => {
       const d = s.val();
       if (!d) return;
@@ -206,8 +179,9 @@ function App() {
       setLastRoundHands(d.lastRoundHands || null);
       setShowFinalResult(d.showFinalResult || false);
     });
-  }, [gameMode, roomId]);
+  }, [roomId]);
 
+  // CPU思考・実行
   useEffect(() => {
     if (gameStatus !== "playing" || isProcessingRef.current) return;
     const pIds = Object.keys(players);
@@ -229,7 +203,10 @@ function App() {
         if (checkWin(nextHand)) finalizeGameScores(currentPlayerId, nextHand);
         else update(ref(db, `rooms/${roomId}`), { deck: newDeck, [`players/${currentPlayerId}/hand`]: nextHand, hasDrawn: true });
       } else {
-        const discardIdx = cpuThink(cpuHand);
+        // CPU簡易思考：不要なカード（セット外）を捨てる
+        const processed = getProcessedHand(cpuHand);
+        const uselessIdx = processed.findIndex(c => !c.isCompleted);
+        const discardIdx = uselessIdx !== -1 ? uselessIdx : 0;
         const newHand = [...cpuHand];
         const discarded = newHand.splice(discardIdx, 1)[0];
         update(ref(db, `rooms/${roomId}`), { 
@@ -243,10 +220,12 @@ function App() {
     runCpuTurn();
   }, [turn, hasDrawn, gameStatus, players, deck]);
 
+  // プレイヤーアクション
   const drawAction = () => {
     const pIds = Object.keys(players);
     if (turn !== pIds.indexOf(myId) || hasDrawn) return;
     const newDeck = [...deck];
+    if (newDeck.length === 0) { finalizeGameScores(null, []); return; }
     const picked = newDeck.pop();
     const newHand = sortHand([...(players[myId].hand || []), picked]);
     if (checkWin(newHand)) finalizeGameScores(myId, newHand);
@@ -287,20 +266,39 @@ function App() {
     ) : null
   );
 
+  // --- 画面レンダリング ---
+  
+  // メニュー画面（URLにルームIDがない、またはgameModeが未選択の場合）
+  if (!gameMode && !isJoined) return (
+    <div className="game-container menu-bg">
+      <div className="start-screen main-menu">
+        <h1 className="title-large">🍲 Hotpot Game</h1>
+        <div className="menu-buttons">
+          <button onClick={() => {
+            const r = Math.random().toString(36).substring(2,7);
+            setRoomId(r); setGameMode("online");
+            window.history.pushState({}, '', `?room=${r}`);
+          }} className="mega-button">オンライン対戦（部屋を作る）</button>
+          {roomId && <button onClick={() => setGameMode("online")} className="mega-button secondary">招待された部屋に参加する</button>}
+        </div>
+      </div>
+    </div>
+  );
+
+  // 名前入力画面
   if (!isJoined) return (
     <div className="game-container">
       <div className="start-screen">
-        <h1 className="title-large">🍲 Hotpot Game</h1>
         <h2 className="section-title">プレイヤー登録</h2>
         <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} className="name-input-large" placeholder="名前を入力" />
         <button onClick={async () => {
           if (!playerName.trim()) return;
           const rId = roomId || Math.random().toString(36).substring(2,7);
-          if (!roomId) { setRoomId(rId); window.history.pushState({}, '', `?room=${rId}`); }
           const pRef = push(ref(db, `rooms/${rId}/players`));
           setMyId(pRef.key);
           await set(pRef, { name: playerName, hand: [], score: 0 });
-          onDisconnect(pRef).remove(); setIsJoined(true); setGameMode("online");
+          onDisconnect(pRef).remove(); 
+          setIsJoined(true);
         }} className="mega-button">参加する</button>
       </div>
     </div>
