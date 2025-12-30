@@ -27,6 +27,7 @@ function App() {
   const [playerName, setPlayerName] = useState("");
   const [isJoined, setIsJoined] = useState(false);
   const [deck, setDeck] = useState([]);
+  const [discardPile, setDiscardPile] = useState([]); // 捨て札の履歴保存用
   const [slots, setSlots] = useState([null, null, null, null]);
   const [turn, setTurn] = useState(0);
   const [round, setRound] = useState(1);
@@ -38,7 +39,7 @@ function App() {
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
 
-  // 役判定
+  // --- 役判定 ---
   const isSet = (c1, c2, c3) => {
     if (c1.id === c2.id && c2.id === c3.id) return true;
     if (c1.category === c2.category && c2.category === c3.category) {
@@ -89,14 +90,10 @@ function App() {
     return roundScore;
   };
 
-  // スコア計算の多重実行を完全に防ぐための修正
+  // --- ゲーム終了・スコア確定 ---
   const finalizeGameScores = (winnerId = null, winningHand = null) => {
-    if (isProcessingRef.current) return;
-    isProcessingRef.current = true;
-
     const roomRef = ref(db, `rooms/${roomId}`);
     runTransaction(roomRef, (currentData) => {
-      // 既にこのラウンドの終了処理が始まっていたら何もしない
       if (!currentData || currentData.status === "finished") return;
       
       const pIds = Object.keys(currentData.players);
@@ -108,8 +105,7 @@ function App() {
         const roundScore = calculateScore(targetHand, isWinner);
         
         // 合計スコアを加算
-        const prevScore = currentData.players[id].score || 0;
-        currentData.players[id].score = prevScore + roundScore;
+        currentData.players[id].score = (currentData.players[id].score || 0) + roundScore;
         
         roundHands[id] = { 
           name: currentData.players[id].name, 
@@ -123,9 +119,22 @@ function App() {
       currentData.lastRoundHands = roundHands;
       if (currentData.round >= 3) currentData.showFinalResult = true;
       return currentData;
-    }).finally(() => {
-      isProcessingRef.current = false;
     });
+  };
+
+  // --- 山札の管理 (山札切れ対応) ---
+  const safeDrawCard = (currentDeck, currentDiscardPile) => {
+    let newDeck = [...currentDeck];
+    let newDiscard = [...(currentDiscardPile || [])];
+
+    if (newDeck.length === 0) {
+      if (newDiscard.length === 0) return { card: null, deck: [], discard: [] };
+      // 捨て札を山札に戻してシャッフル
+      newDeck = [...newDiscard].sort(() => Math.random() - 0.5);
+      newDiscard = [];
+    }
+    const card = newDeck.pop();
+    return { card, deck: newDeck, discard: newDiscard };
   };
 
   const startAction = useCallback(async (resetGame = false) => {
@@ -156,6 +165,7 @@ function App() {
       
       currentData.players = newPlayers;
       currentData.deck = fullDeck;
+      currentData.discardPile = []; // リセット
       currentData.slots = [null, null, null, null];
       currentData.turn = nextFirstIdx;
       currentData.hasDrawn = false;
@@ -168,7 +178,6 @@ function App() {
     });
   }, [roomId]);
 
-  // タイトルへ戻る処理
   const backToTitle = () => {
     setGameMode(null);
     setIsJoined(false);
@@ -185,6 +194,7 @@ function App() {
       setPlayers(d.players || {});
       setGameStatus(d.status || "waiting");
       setDeck(d.deck || []);
+      setDiscardPile(d.discardPile || []);
       setSlots(d.slots || [null, null, null, null]);
       setTurn(d.turn || 0);
       setRound(d.round || 1);
@@ -194,6 +204,7 @@ function App() {
     });
   }, [roomId]);
 
+  // CPUロジック (山札切れ対応)
   useEffect(() => {
     if (gameStatus !== "playing" || isProcessingRef.current) return;
     const pIds = Object.keys(players);
@@ -203,53 +214,55 @@ function App() {
     if (myId !== pIds[0]) return; 
 
     const runCpuTurn = async () => {
-      if (isProcessingRef.current) return;
       isProcessingRef.current = true;
       await new Promise(r => setTimeout(r, 1000));
-      const cpuHand = players[currentPlayerId].hand || [];
       
       if (!hasDrawn) {
-        const newDeck = [...deck];
-        if (newDeck.length === 0) { 
-          isProcessingRef.current = false;
-          finalizeGameScores(null, []); 
-          return; 
-        }
-        const picked = newDeck.pop();
-        const nextHand = sortHand([...cpuHand, picked]);
+        const result = safeDrawCard(deck, discardPile);
+        if (!result.card) { finalizeGameScores(null, []); isProcessingRef.current = false; return; }
+        
+        const nextHand = sortHand([...(players[currentPlayerId].hand || []), result.card]);
         if (checkWin(nextHand)) {
-          isProcessingRef.current = false;
           finalizeGameScores(currentPlayerId, nextHand);
         } else {
-          update(ref(db, `rooms/${roomId}`), { deck: newDeck, [`players/${currentPlayerId}/hand`]: nextHand, hasDrawn: true });
-          isProcessingRef.current = false;
+          update(ref(db, `rooms/${roomId}`), { deck: result.deck, discardPile: result.discard, [`players/${currentPlayerId}/hand`]: nextHand, hasDrawn: true });
         }
       } else {
+        const cpuHand = players[currentPlayerId].hand || [];
         const processed = getProcessedHand(cpuHand);
         const uselessIdx = processed.findIndex(c => !c.isCompleted);
         const discardIdx = uselessIdx !== -1 ? uselessIdx : 0;
         const newHand = [...cpuHand];
         const discarded = newHand.splice(discardIdx, 1)[0];
+        
+        // 捨て札を履歴に追加
+        const newDiscardPile = [...discardPile, discarded];
         update(ref(db, `rooms/${roomId}`), { 
           [`players/${currentPlayerId}/hand`]: sortHand(newHand), 
           [`slots/${turn}`]: discarded, 
+          discardPile: newDiscardPile,
           turn: (turn + 1) % 4, hasDrawn: false 
         });
-        isProcessingRef.current = false;
       }
+      isProcessingRef.current = false;
     };
     runCpuTurn();
-  }, [turn, hasDrawn, gameStatus, players, deck]);
+  }, [turn, hasDrawn, gameStatus, players, deck, discardPile]);
 
+  // プレイヤーアクション (山札切れ対応)
   const drawAction = () => {
     const pIds = Object.keys(players);
     if (turn !== pIds.indexOf(myId) || hasDrawn) return;
-    const newDeck = [...deck];
-    if (newDeck.length === 0) { finalizeGameScores(null, []); return; }
-    const picked = newDeck.pop();
-    const newHand = sortHand([...(players[myId].hand || []), picked]);
-    if (checkWin(newHand)) finalizeGameScores(myId, newHand);
-    else update(ref(db, `rooms/${roomId}`), { deck: newDeck, [`players/${myId}/hand`]: newHand, hasDrawn: true });
+    
+    const result = safeDrawCard(deck, discardPile);
+    if (!result.card) { finalizeGameScores(null, []); return; }
+
+    const newHand = sortHand([...(players[myId].hand || []), result.card]);
+    if (checkWin(newHand)) {
+      finalizeGameScores(myId, newHand);
+    } else {
+      update(ref(db, `rooms/${roomId}`), { deck: result.deck, discardPile: result.discard, [`players/${myId}/hand`]: newHand, hasDrawn: true });
+    }
   };
 
   const discardAction = (idx) => {
@@ -257,7 +270,13 @@ function App() {
     if (turn !== pIds.indexOf(myId) || !hasDrawn) return;
     const curH = [...(players[myId].hand || [])];
     const discarded = curH.splice(idx, 1)[0];
-    update(ref(db, `rooms/${roomId}`), { [`players/${myId}/hand`]: sortHand(curH), [`slots/${turn}`]: discarded, turn: (turn + 1) % 4, hasDrawn: false });
+    const newDiscardPile = [...discardPile, discarded];
+    update(ref(db, `rooms/${roomId}`), { 
+      [`players/${myId}/hand`]: sortHand(curH), 
+      [`slots/${turn}`]: discarded, 
+      discardPile: newDiscardPile,
+      turn: (turn + 1) % 4, hasDrawn: false 
+    });
   };
 
   const pickFromSlotAction = (idx) => {
@@ -286,6 +305,7 @@ function App() {
     ) : null
   );
 
+  // --- UI ---
   if (!gameMode && !isJoined) return (
     <div className="game-container menu-bg">
       <div className="start-screen main-menu">
@@ -313,8 +333,7 @@ function App() {
           const pRef = push(ref(db, `rooms/${rId}/players`));
           setMyId(pRef.key);
           await set(pRef, { name: playerName, hand: [], score: 0 });
-          onDisconnect(pRef).remove(); 
-          setIsJoined(true);
+          onDisconnect(pRef).remove(); setIsJoined(true);
         }} className="mega-button">参加する</button>
       </div>
     </div>
