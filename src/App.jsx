@@ -27,7 +27,7 @@ function App() {
   const [playerName, setPlayerName] = useState("");
   const [isJoined, setIsJoined] = useState(false);
   const [deck, setDeck] = useState([]);
-  const [discardPile, setDiscardPile] = useState([]); // 捨て札の履歴保存用
+  const [discardPile, setDiscardPile] = useState([]); 
   const [slots, setSlots] = useState([null, null, null, null]);
   const [turn, setTurn] = useState(0);
   const [round, setRound] = useState(1);
@@ -39,7 +39,6 @@ function App() {
   const getInviteUrl = () => `${window.location.origin}${window.location.pathname}?room=${roomId}`;
   const sortHand = (h) => [...(h || [])].sort((a, b) => a.id - b.id);
 
-  // --- 役判定 ---
   const isSet = (c1, c2, c3) => {
     if (c1.id === c2.id && c2.id === c3.id) return true;
     if (c1.category === c2.category && c2.category === c3.category) {
@@ -90,11 +89,15 @@ function App() {
     return roundScore;
   };
 
-  // --- ゲーム終了・スコア確定 ---
+  // --- スコア計算のロック強化 ---
   const finalizeGameScores = (winnerId = null, winningHand = null) => {
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+
     const roomRef = ref(db, `rooms/${roomId}`);
     runTransaction(roomRef, (currentData) => {
-      if (!currentData || currentData.status === "finished") return;
+      // 誰かが先に計算を終わらせて status が finished になっていたら、何もせず終了（二重加算防止）
+      if (!currentData || currentData.status === "finished") return undefined;
       
       const pIds = Object.keys(currentData.players);
       const roundHands = {};
@@ -119,17 +122,18 @@ function App() {
       currentData.lastRoundHands = roundHands;
       if (currentData.round >= 3) currentData.showFinalResult = true;
       return currentData;
+    }).then(() => {
+      isProcessingRef.current = false;
+    }).catch(() => {
+      isProcessingRef.current = false;
     });
   };
 
-  // --- 山札の管理 (山札切れ対応) ---
   const safeDrawCard = (currentDeck, currentDiscardPile) => {
     let newDeck = [...currentDeck];
     let newDiscard = [...(currentDiscardPile || [])];
-
     if (newDeck.length === 0) {
       if (newDiscard.length === 0) return { card: null, deck: [], discard: [] };
-      // 捨て札を山札に戻してシャッフル
       newDeck = [...newDiscard].sort(() => Math.random() - 0.5);
       newDiscard = [];
     }
@@ -165,7 +169,7 @@ function App() {
       
       currentData.players = newPlayers;
       currentData.deck = fullDeck;
-      currentData.discardPile = []; // リセット
+      currentData.discardPile = [];
       currentData.slots = [null, null, null, null];
       currentData.turn = nextFirstIdx;
       currentData.hasDrawn = false;
@@ -179,10 +183,7 @@ function App() {
   }, [roomId]);
 
   const backToTitle = () => {
-    setGameMode(null);
-    setIsJoined(false);
-    setRoomId(null);
-    setMyId(null);
+    setGameMode(null); setIsJoined(false); setRoomId(null); setMyId(null);
     window.history.pushState({}, '', window.location.pathname);
   };
 
@@ -204,7 +205,6 @@ function App() {
     });
   }, [roomId]);
 
-  // CPUロジック (山札切れ対応)
   useEffect(() => {
     if (gameStatus !== "playing" || isProcessingRef.current) return;
     const pIds = Object.keys(players);
@@ -214,18 +214,24 @@ function App() {
     if (myId !== pIds[0]) return; 
 
     const runCpuTurn = async () => {
+      if (isProcessingRef.current) return;
       isProcessingRef.current = true;
       await new Promise(r => setTimeout(r, 1000));
       
       if (!hasDrawn) {
         const result = safeDrawCard(deck, discardPile);
-        if (!result.card) { finalizeGameScores(null, []); isProcessingRef.current = false; return; }
-        
+        if (!result.card) { 
+          isProcessingRef.current = false;
+          finalizeGameScores(null, []); 
+          return; 
+        }
         const nextHand = sortHand([...(players[currentPlayerId].hand || []), result.card]);
         if (checkWin(nextHand)) {
+          isProcessingRef.current = false;
           finalizeGameScores(currentPlayerId, nextHand);
         } else {
           update(ref(db, `rooms/${roomId}`), { deck: result.deck, discardPile: result.discard, [`players/${currentPlayerId}/hand`]: nextHand, hasDrawn: true });
+          isProcessingRef.current = false;
         }
       } else {
         const cpuHand = players[currentPlayerId].hand || [];
@@ -234,8 +240,6 @@ function App() {
         const discardIdx = uselessIdx !== -1 ? uselessIdx : 0;
         const newHand = [...cpuHand];
         const discarded = newHand.splice(discardIdx, 1)[0];
-        
-        // 捨て札を履歴に追加
         const newDiscardPile = [...discardPile, discarded];
         update(ref(db, `rooms/${roomId}`), { 
           [`players/${currentPlayerId}/hand`]: sortHand(newHand), 
@@ -243,26 +247,20 @@ function App() {
           discardPile: newDiscardPile,
           turn: (turn + 1) % 4, hasDrawn: false 
         });
+        isProcessingRef.current = false;
       }
-      isProcessingRef.current = false;
     };
     runCpuTurn();
   }, [turn, hasDrawn, gameStatus, players, deck, discardPile]);
 
-  // プレイヤーアクション (山札切れ対応)
   const drawAction = () => {
     const pIds = Object.keys(players);
     if (turn !== pIds.indexOf(myId) || hasDrawn) return;
-    
     const result = safeDrawCard(deck, discardPile);
     if (!result.card) { finalizeGameScores(null, []); return; }
-
     const newHand = sortHand([...(players[myId].hand || []), result.card]);
-    if (checkWin(newHand)) {
-      finalizeGameScores(myId, newHand);
-    } else {
-      update(ref(db, `rooms/${roomId}`), { deck: result.deck, discardPile: result.discard, [`players/${myId}/hand`]: newHand, hasDrawn: true });
-    }
+    if (checkWin(newHand)) finalizeGameScores(myId, newHand);
+    else update(ref(db, `rooms/${roomId}`), { deck: result.deck, discardPile: result.discard, [`players/${myId}/hand`]: newHand, hasDrawn: true });
   };
 
   const discardAction = (idx) => {
@@ -271,19 +269,14 @@ function App() {
     const curH = [...(players[myId].hand || [])];
     const discarded = curH.splice(idx, 1)[0];
     const newDiscardPile = [...discardPile, discarded];
-    update(ref(db, `rooms/${roomId}`), { 
-      [`players/${myId}/hand`]: sortHand(curH), 
-      [`slots/${turn}`]: discarded, 
-      discardPile: newDiscardPile,
-      turn: (turn + 1) % 4, hasDrawn: false 
-    });
+    update(ref(db, `rooms/${roomId}`), { [`players/${myId}/hand`]: sortHand(curH), [`slots/${turn}`]: discarded, discardPile: newDiscardPile, turn: (turn + 1) % 4, hasDrawn: false });
   };
 
   const pickFromSlotAction = (idx) => {
     const pIds = Object.keys(players);
     if (turn !== pIds.indexOf(myId) || hasDrawn || !slots[idx]) return;
     runTransaction(ref(db, `rooms/${roomId}`), (d) => {
-      if (!d || !d.slots[idx]) return;
+      if (!d || !d.slots[idx]) return undefined;
       const picked = d.slots[idx]; d.slots[idx] = null;
       const newHand = sortHand([...(d.players[myId].hand || []), picked]);
       if (checkWin(newHand)) { d.players[myId].hand = newHand; setTimeout(() => finalizeGameScores(myId, newHand), 100); }
@@ -305,7 +298,6 @@ function App() {
     ) : null
   );
 
-  // --- UI ---
   if (!gameMode && !isJoined) return (
     <div className="game-container menu-bg">
       <div className="start-screen main-menu">
@@ -369,7 +361,8 @@ function App() {
                 <div className="slots-grid">
                   <div className="slot t" onClick={()=>pickFromSlotAction((mIdx+2)%4)}><CardDisplay card={slots[(mIdx+2)%4]}/></div>
                   <div className="slot l" onClick={()=>pickFromSlotAction((mIdx+1)%4)}><CardDisplay card={slots[(mIdx+1)%4]}/></div>
-                  <div className={`deck ${(!hasDrawn && turn===mIdx) ? 'can-draw' : ''}`} onClick={drawAction}>山札 ({deck.length})</div>
+                  {/* 山札：枚数表示を削除 */}
+                  <div className={`deck ${(!hasDrawn && turn===mIdx) ? 'can-draw' : ''}`} onClick={drawAction}>山札</div>
                   <div className="slot r" onClick={()=>pickFromSlotAction((mIdx+3)%4)}><CardDisplay card={slots[(mIdx+3)%4]}/></div>
                   <div className="slot b" onClick={()=>pickFromSlotAction(mIdx)}><CardDisplay card={slots[mIdx]}/></div>
                 </div>
