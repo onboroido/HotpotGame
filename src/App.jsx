@@ -89,15 +89,19 @@ function App() {
     return roundScore;
   };
 
-  // --- スコア計算のロック強化 ---
+  // --- スコア修正の核心：一回きりの実行を保証 ---
   const finalizeGameScores = (winnerId = null, winningHand = null) => {
+    // 自分のブラウザですでに実行中ならスキップ
     if (isProcessingRef.current) return;
     isProcessingRef.current = true;
 
     const roomRef = ref(db, `rooms/${roomId}`);
     runTransaction(roomRef, (currentData) => {
-      // 誰かが先に計算を終わらせて status が finished になっていたら、何もせず終了（二重加算防止）
-      if (!currentData || currentData.status === "finished") return undefined;
+      // 誰かが先に計算を終えていたら status は finished になっているはず
+      // その場合は undefined を返してトランザクションをキャンセルする
+      if (!currentData || currentData.status === "finished") {
+        return undefined; 
+      }
       
       const pIds = Object.keys(currentData.players);
       const roundHands = {};
@@ -107,7 +111,7 @@ function App() {
         const targetHand = isWinner ? winningHand : (currentData.players[id].hand || []);
         const roundScore = calculateScore(targetHand, isWinner);
         
-        // 合計スコアを加算
+        // 合計スコアを加算（1ラウンドにつき1度しか通らない）
         currentData.players[id].score = (currentData.players[id].score || 0) + roundScore;
         
         roundHands[id] = { 
@@ -122,9 +126,7 @@ function App() {
       currentData.lastRoundHands = roundHands;
       if (currentData.round >= 3) currentData.showFinalResult = true;
       return currentData;
-    }).then(() => {
-      isProcessingRef.current = false;
-    }).catch(() => {
+    }).finally(() => {
       isProcessingRef.current = false;
     });
   };
@@ -206,32 +208,26 @@ function App() {
   }, [roomId]);
 
   useEffect(() => {
-    if (gameStatus !== "playing" || isProcessingRef.current) return;
+    if (gameStatus !== "playing") return;
     const pIds = Object.keys(players);
     if (pIds.length < 4) return;
     const currentPlayerId = pIds[turn];
     if (!players[currentPlayerId]?.isCpu) return;
+    
+    // CPUの操作は部屋の「ホスト（一人目）」だけが送信する（二重送信防止）
     if (myId !== pIds[0]) return; 
 
     const runCpuTurn = async () => {
-      if (isProcessingRef.current) return;
-      isProcessingRef.current = true;
       await new Promise(r => setTimeout(r, 1000));
       
       if (!hasDrawn) {
         const result = safeDrawCard(deck, discardPile);
-        if (!result.card) { 
-          isProcessingRef.current = false;
-          finalizeGameScores(null, []); 
-          return; 
-        }
+        if (!result.card) { finalizeGameScores(null, []); return; }
         const nextHand = sortHand([...(players[currentPlayerId].hand || []), result.card]);
         if (checkWin(nextHand)) {
-          isProcessingRef.current = false;
           finalizeGameScores(currentPlayerId, nextHand);
         } else {
           update(ref(db, `rooms/${roomId}`), { deck: result.deck, discardPile: result.discard, [`players/${currentPlayerId}/hand`]: nextHand, hasDrawn: true });
-          isProcessingRef.current = false;
         }
       } else {
         const cpuHand = players[currentPlayerId].hand || [];
@@ -247,11 +243,10 @@ function App() {
           discardPile: newDiscardPile,
           turn: (turn + 1) % 4, hasDrawn: false 
         });
-        isProcessingRef.current = false;
       }
     };
     runCpuTurn();
-  }, [turn, hasDrawn, gameStatus, players, deck, discardPile]);
+  }, [turn, hasDrawn, gameStatus, players, deck, discardPile, myId, roomId]);
 
   const drawAction = () => {
     const pIds = Object.keys(players);
@@ -361,7 +356,7 @@ function App() {
                 <div className="slots-grid">
                   <div className="slot t" onClick={()=>pickFromSlotAction((mIdx+2)%4)}><CardDisplay card={slots[(mIdx+2)%4]}/></div>
                   <div className="slot l" onClick={()=>pickFromSlotAction((mIdx+1)%4)}><CardDisplay card={slots[(mIdx+1)%4]}/></div>
-                  {/* 山札：枚数表示を削除 */}
+                  {/* 山札：カウント表示なし */}
                   <div className={`deck ${(!hasDrawn && turn===mIdx) ? 'can-draw' : ''}`} onClick={drawAction}>山札</div>
                   <div className="slot r" onClick={()=>pickFromSlotAction((mIdx+3)%4)}><CardDisplay card={slots[(mIdx+3)%4]}/></div>
                   <div className="slot b" onClick={()=>pickFromSlotAction(mIdx)}><CardDisplay card={slots[mIdx]}/></div>
