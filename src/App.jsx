@@ -89,29 +89,31 @@ function App() {
     return roundScore;
   };
 
-  // --- スコア修正の核心：一回きりの実行を保証 ---
+  // --- スコア修正：DB内の手札データのみを信頼する ---
   const finalizeGameScores = (winnerId = null, winningHand = null) => {
-    // 自分のブラウザですでに実行中ならスキップ
     if (isProcessingRef.current) return;
     isProcessingRef.current = true;
 
     const roomRef = ref(db, `rooms/${roomId}`);
     runTransaction(roomRef, (currentData) => {
-      // 誰かが先に計算を終えていたら status は finished になっているはず
-      // その場合は undefined を返してトランザクションをキャンセルする
-      if (!currentData || currentData.status === "finished") {
-        return undefined; 
-      }
+      // 既に終了処理が始まっている場合はスキップ
+      if (!currentData || currentData.status === "finished") return undefined;
       
       const pIds = Object.keys(currentData.players);
       const roundHands = {};
       
+      // 計算前に、上がった人の手札を最新の状態に更新
+      if (winnerId && winningHand) {
+        currentData.players[winnerId].hand = winningHand;
+      }
+
       pIds.forEach(id => {
         const isWinner = (id === winnerId);
-        const targetHand = isWinner ? winningHand : (currentData.players[id].hand || []);
+        // 重要：自分のローカルステートではなく、currentData(DB)の手札を使う
+        const targetHand = currentData.players[id].hand || [];
         const roundScore = calculateScore(targetHand, isWinner);
         
-        // 合計スコアを加算（1ラウンドにつき1度しか通らない）
+        // 合計スコアを加算
         currentData.players[id].score = (currentData.players[id].score || 0) + roundScore;
         
         roundHands[id] = { 
@@ -166,20 +168,16 @@ function App() {
         };
       });
 
-      const history = resetGame ? [] : (currentData.historyFirstPlayers || []);
-      const nextFirstIdx = (history.length === 0) ? Math.floor(Math.random() * 4) : (history[history.length - 1] + 1) % 4;
-      
       currentData.players = newPlayers;
       currentData.deck = fullDeck;
       currentData.discardPile = [];
       currentData.slots = [null, null, null, null];
-      currentData.turn = nextFirstIdx;
+      currentData.turn = Math.floor(Math.random() * 4);
       currentData.hasDrawn = false;
       currentData.status = "playing";
       currentData.round = resetGame ? 1 : (currentData.round || 1) + 1;
       currentData.lastRoundHands = null;
       currentData.showFinalResult = false;
-      currentData.historyFirstPlayers = [...history, nextFirstIdx];
       return currentData;
     });
   }, [roomId]);
@@ -213,22 +211,16 @@ function App() {
     if (pIds.length < 4) return;
     const currentPlayerId = pIds[turn];
     if (!players[currentPlayerId]?.isCpu) return;
-    
-    // CPUの操作は部屋の「ホスト（一人目）」だけが送信する（二重送信防止）
     if (myId !== pIds[0]) return; 
 
     const runCpuTurn = async () => {
       await new Promise(r => setTimeout(r, 1000));
-      
       if (!hasDrawn) {
         const result = safeDrawCard(deck, discardPile);
         if (!result.card) { finalizeGameScores(null, []); return; }
         const nextHand = sortHand([...(players[currentPlayerId].hand || []), result.card]);
-        if (checkWin(nextHand)) {
-          finalizeGameScores(currentPlayerId, nextHand);
-        } else {
-          update(ref(db, `rooms/${roomId}`), { deck: result.deck, discardPile: result.discard, [`players/${currentPlayerId}/hand`]: nextHand, hasDrawn: true });
-        }
+        if (checkWin(nextHand)) finalizeGameScores(currentPlayerId, nextHand);
+        else update(ref(db, `rooms/${roomId}`), { deck: result.deck, discardPile: result.discard, [`players/${currentPlayerId}/hand`]: nextHand, hasDrawn: true });
       } else {
         const cpuHand = players[currentPlayerId].hand || [];
         const processed = getProcessedHand(cpuHand);
@@ -237,12 +229,7 @@ function App() {
         const newHand = [...cpuHand];
         const discarded = newHand.splice(discardIdx, 1)[0];
         const newDiscardPile = [...discardPile, discarded];
-        update(ref(db, `rooms/${roomId}`), { 
-          [`players/${currentPlayerId}/hand`]: sortHand(newHand), 
-          [`slots/${turn}`]: discarded, 
-          discardPile: newDiscardPile,
-          turn: (turn + 1) % 4, hasDrawn: false 
-        });
+        update(ref(db, `rooms/${roomId}`), { [`players/${currentPlayerId}/hand`]: sortHand(newHand), [`slots/${turn}`]: discarded, discardPile: newDiscardPile, turn: (turn + 1) % 4, hasDrawn: false });
       }
     };
     runCpuTurn();
@@ -293,6 +280,7 @@ function App() {
     ) : null
   );
 
+  // --- UI Layouts ---
   if (!gameMode && !isJoined) return (
     <div className="game-container menu-bg">
       <div className="start-screen main-menu">
@@ -356,7 +344,6 @@ function App() {
                 <div className="slots-grid">
                   <div className="slot t" onClick={()=>pickFromSlotAction((mIdx+2)%4)}><CardDisplay card={slots[(mIdx+2)%4]}/></div>
                   <div className="slot l" onClick={()=>pickFromSlotAction((mIdx+1)%4)}><CardDisplay card={slots[(mIdx+1)%4]}/></div>
-                  {/* 山札：カウント表示なし */}
                   <div className={`deck ${(!hasDrawn && turn===mIdx) ? 'can-draw' : ''}`} onClick={drawAction}>山札</div>
                   <div className="slot r" onClick={()=>pickFromSlotAction((mIdx+3)%4)}><CardDisplay card={slots[(mIdx+3)%4]}/></div>
                   <div className="slot b" onClick={()=>pickFromSlotAction(mIdx)}><CardDisplay card={slots[mIdx]}/></div>
@@ -386,8 +373,8 @@ function App() {
                 <div key={id} className={`open-player-row ${data.isWinner ? 'winner-row' : ''}`}>
                   <div className="open-player-info"><span className="open-player-name">{data.name}</span><span className="open-player-score">+{data.roundScore}pt</span></div>
                   <div className="open-hand-cards">
-                    {getProcessedHand(data.hand || []).map((c, i) => (
-                      <div key={i} className="mini-card" style={{'--card-color': c.color}}><span>{c.icon}</span>{c.isCompleted && <div className="mini-set-dot"></div>}</div>
+                    {(data.hand || []).map((c, i) => (
+                      <div key={i} className="mini-card" style={{'--card-color': c.color}}><span>{c.icon}</span></div>
                     ))}
                   </div>
                 </div>
